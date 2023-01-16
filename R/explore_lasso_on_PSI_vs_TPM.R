@@ -477,11 +477,13 @@ quantifs_filtered2 <- quantifs |>
 
 
 
-replicated_regression <- replicate(n = 50,
-                                   expr = map(events_to_keep2, possibly(sparse_regression,
-                                                                        otherwise = list(rsquare=NA_real_,nb_coefs=NA_real_))),
-                                   simplify = FALSE)
-qs::qsave(replicated_regression, "data/intermediates/230113_replicated_regression_log_cache.qs")
+# replicated_regression <- replicate(n = 50,
+#                                    expr = map(events_to_keep2, possibly(sparse_regression,
+#                                                                         otherwise = list(rsquare=NA_real_,nb_coefs=NA_real_))),
+#                                    simplify = FALSE)
+# qs::qsave(replicated_regression, "data/intermediates/230113_replicated_regression_log_cache.qs")
+
+replicated_regression <- qs::qread("data/intermediates/230113_replicated_regression_log_cache.qs")
 
 replicated_rsquare <- map(replicated_regression,
                           \(replicate) {
@@ -593,6 +595,7 @@ intersected_coefs_single_event |>
   geom_hline(aes(yintercept = 20), color = 'darkred', linetype = "dotted")
 
 
+
 # Compare with known ----
 
 intersected_coefs <- replicated_coefs |>
@@ -634,9 +637,9 @@ sum(overlap_intersected_coefs$nb_sf_known)
 
 
 rep_overlap <- replicate(500,
-          sum(map2_int(sample(intersected_coefs$computed), sample(intersected_coefs$known),
-                       ~ length(intersect(.x$computed_sf_gene_id, .y$sf_id))))
-          )
+                         sum(map2_int(sample(intersected_coefs$computed), sample(intersected_coefs$known),
+                                      ~ length(intersect(.x$computed_sf_gene_id, .y$sf_id))))
+)
 
 hist(rep_overlap, breaks = 30, xlab = "Number of overlapping interactions under randomization",main = NULL); abline(v = 22, col = 'red')
 
@@ -644,8 +647,89 @@ hist(rep_overlap, breaks = 30, xlab = "Number of overlapping interactions under 
 
 
 
-# Select only good fits
-
-hist(replicated_rsquare$Rsquare_adjusted, breaks = 800, xlim = c(.48,.52))
+# Select only good fits ----
+hist(replicated_rsquare$Rsquare_adjusted, breaks = 60); abline(v = .51, col = 'red')
+hist(replicated_rsquare$Rsquare_adjusted, breaks = 800, xlim = c(.48,.52)); abline(v = .51, col = 'red')
 table(replicated_rsquare$Rsquare_adjusted > .51)
+
+pluck(replicated_regression[[45]][[25]],"coefs_sf", .default = tibble()) |>
+  add_column(event_id = "SE111")
+length(replicated_regression[[45]])
+events_to_keep2[24:26]
+
+replicated_coefs <- imap(replicated_regression,
+                         \(replicate, ind) {
+                           map2(replicate, events_to_keep2,
+                                \(rep, .event_id) {
+                                  pluck(rep, "coefs_sf", .default = tibble()) |>
+                                    add_column(event_id = .event_id)
+                                }) |>
+                             list_rbind() |>
+                             add_column(replicate = paste0("replicate_", ind))
+                         }) |>
+  list_rbind()
+
+
+
+
+
+filt_replicated_coefs <- replicated_coefs |>
+  left_join(replicated_rsquare,
+             by = c("event_id", "replicate")) |>
+  filter(Rsquare_adjusted > 0.51)
+
+
+#~ Compare with known ----
+
+filt_intersected_coefs <- filt_replicated_coefs |>
+  group_by(transcript_id, event_id) |>
+  summarize(nb_intersections = sum(s1 != 0),
+            nb_tests = n(),
+            .groups = "drop") |>
+  # robustness criterion (20/50, i.e. 40% of tests)
+  filter(nb_intersections/nb_tests >= .4) |>
+  # add event info
+  left_join(events_coordinates |>
+              select(event_id, gene_id),
+            by = "event_id") |>
+  rename(target_id = gene_id,
+         computed_sf_tx_id = transcript_id) |>
+  # nest computed sf list
+  mutate(computed_sf_gene_id = convert_sf_tx2g(computed_sf_tx_id)) |>
+  group_by(event_id, target_id) |>
+  nest(computed = c(computed_sf_tx_id, computed_sf_gene_id, nb_intersections, nb_tests)) |>
+  ungroup() |>
+  # add and nest known sf list
+  left_join(sf2target,
+            by = "target_id") |>
+  group_by(event_id, target_id) |>
+  nest(known = c(sf_id, sf_name))
+
+# find intersection size of computed and known SF
+filt_overlap_intersected_coefs <- filt_intersected_coefs |>
+  select(event_id, target_id, target_name) |>
+  add_column(nb_sf_overlap = map2_int(filt_intersected_coefs$computed, filt_intersected_coefs$known,
+                                      ~ length(intersect(.x$computed_sf_gene_id, .y$sf_id))),
+             nb_sf_computed = map_int(filt_intersected_coefs$computed, ~length(.x$computed_sf_gene_id) - 1),
+             nb_sf_known = map_int(filt_intersected_coefs$known, ~length(.x$sf_id)))
+
+sum(filt_overlap_intersected_coefs$nb_sf_overlap)
+sum(filt_overlap_intersected_coefs$nb_sf_known)
+10/81
+#> 12%
+
+
+rep_overlap <- replicate(500,
+                         sum(map2_int(sample(filt_intersected_coefs$computed), sample(filt_intersected_coefs$known),
+                                      ~ length(intersect(.x$computed_sf_gene_id, .y$sf_id))))
+)
+
+hist(rep_overlap, breaks = 10, xlab = "Number of overlapping interactions under randomization",main = NULL); abline(v = 10, col = 'red')
+
+#> not better
+
+
+
+
+
 
