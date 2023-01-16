@@ -47,11 +47,15 @@ events_coordinates <- read_tsv("data/export_for_arman/221111_events_coordinates.
 sparse_regression <- function(my_ev){
   x <- sf_expression |>
     select(transcript_id, sample_id, TPM) |>
+    mutate(TPM = log(TPM + 1)) |>
     pivot_wider(id_cols = sample_id,
                 names_from = "transcript_id",
                 values_from = "TPM") |>
     column_to_rownames("sample_id") |>
-    as.matrix()
+    as.matrix() |>
+    scale()
+  x <- x[,! apply(x, 2, \(col) any(is.na(col)))]
+  
   y <- quantifs[quantifs$event_id == my_ev, c("sample_id", "PSI")] |>
     column_to_rownames("sample_id") |>
     filter(!is.na(PSI)) |>
@@ -68,7 +72,7 @@ sparse_regression <- function(my_ev){
   
   
   
-  cvfit <- cv.glmnet(x[train,], y[train])
+  cvfit <- cv.glmnet(x[train,], y[train], nfolds = 30)
   
   # Estimate on test data
   prediction_on_test <- predict(cvfit, newx = x[-train,], s = "lambda.min") |>
@@ -105,10 +109,10 @@ sparse_regression <- function(my_ev){
 #          prediction_on_test = map(fit, \(x) x[["prediction_on_test"]]),
 #          coefs_sf = map(fit, \(x) x[["coefs_sf"]])) |>
 #   select(-fit)
-# qs::qsave(first_pass_regression, "data/intermediates/230109_fits_for_quantifs_cache.qs")
+# qs::qsave(first_pass_regression, "data/intermediates/230113_fits_for_quantifs_scaled_log_cache.qs")
 
 
-first_pass_regression <- qs::qread("data/intermediates/230109_fits_for_quantifs_cache.qs")
+first_pass_regression <- qs::qread("data/intermediates/230113_fits_for_quantifs_scaled_log_cache.qs")
 
 
 # Filter events ----
@@ -167,7 +171,7 @@ patchwork::wrap_plots(
 
 
 # Play with examples ----
-# SE_136, SE_303 are good
+# SE_136, SE_303 are good. 1060 particularly
 (my_ev <- sample(quantifs_filtered$event_id, 1))
 my_ev <- "SE_136"
 
@@ -187,13 +191,19 @@ quantifs_filtered |>
 
 
 # Sparse LASSO
+#scale x and remove cols that have NaNs (when there is no measurement)
 x <- sf_expression |>
   select(transcript_id, sample_id, TPM) |>
+  mutate(TPM = log(TPM + 1)) |>
   pivot_wider(id_cols = sample_id,
               names_from = "transcript_id",
               values_from = "TPM") |>
   column_to_rownames("sample_id") |>
-  as.matrix()
+  as.matrix() |>
+  scale()
+x <- x[,! apply(x, 2, \(col) any(is.na(col)))]
+
+
 y <- quantifs_filtered[quantifs_filtered$event_id == my_ev, c("sample_id", "PSI")] |>
   column_to_rownames("sample_id") |>
   filter(!is.na(PSI)) |>
@@ -209,8 +219,7 @@ n <- nrow(x)
 train <- sample(n, round(.7*n))
 
 
-
-cvfit <- cv.glmnet(x[train,], y[train])
+cvfit <- cv.glmnet(x[train,], y[train], nfolds = 30, type.measure = "mse")
 plot(cvfit)
 log(cvfit$lambda.1se)
 log(cvfit$lambda.min)
@@ -256,11 +265,14 @@ my_ev <- "SE_303"
 
 x <- sf_expression |>
   select(transcript_id, sample_id, TPM) |>
+  mutate(TPM = log(TPM + 1)) |>
   pivot_wider(id_cols = sample_id,
               names_from = "transcript_id",
               values_from = "TPM") |>
   column_to_rownames("sample_id") |>
-  as.matrix()
+  as.matrix() |>
+  scale()
+x <- x[,! apply(x, 2, \(col) any(is.na(col)))]
 y <- quantifs[quantifs$event_id == my_ev, c("sample_id", "PSI")] |>
   column_to_rownames("sample_id") |>
   filter(!is.na(PSI)) |>
@@ -366,7 +378,7 @@ patchwork::wrap_plots(
 
 
 
-xx <- first_pass_filt |>
+overlaps_sf <- first_pass_filt |>
   mutate(computed_sf = map(coefs_sf,
                            \(x) convert_sf_tx2g(x$transcript_id[x$s1 !=0 & x$transcript_id != "(Intercept)"])
   )) |>
@@ -384,21 +396,21 @@ xx <- first_pass_filt |>
          nb_known_sf = map_int(known_sf, length),
          nb_computed_sf = map_int(computed_sf, length))
 
-xx |>
+overlaps_sf |>
   mutate(prop_overlapping_sf = nb_overlapping_sf/nb_known_sf) |>
   ggplot() +
   theme_classic() +
   geom_point(aes(x = nb_samples, y = prop_overlapping_sf), alpha = .2)
-sum(xx$nb_known_sf)
-sum(xx$nb_overlapping_sf)
+sum(overlaps_sf$nb_known_sf)
+sum(overlaps_sf$nb_overlapping_sf)
 126/1496
-#> only 8% of known interactions are found in our computations
+#> (no scaling) only 8% of known interactions are found in our computations
+154/1750
+#> 8.8% with scaling
+208/1750
+#> 12% on log scale
 
-View(xx)
-
-
-first_pass_filt_rand <- first_pass_filt
-
+# randomize and test
 randomized_overlaps <- replicate(200,{
   first_pass_filt_rand <- first_pass_filt
   first_pass_filt_rand$coefs_sf <- sample(first_pass_filt$coefs_sf)
@@ -423,11 +435,12 @@ randomized_overlaps <- replicate(200,{
   sum(xx_rand$nb_overlapping_sf)
 })
 
-hist(randomized_overlaps, breaks = 50) ; abline(v = sum(xx$nb_overlapping_sf), col = 'darkred')
+hist(randomized_overlaps, breaks = 50) ; abline(v = sum(overlaps_sf$nb_overlapping_sf), col = 'darkred')
 
-table(randomized_overlaps >= sum(xx$nb_overlapping_sf))
+table(randomized_overlaps >= sum(overlaps_sf$nb_overlapping_sf))
 5/200
-
+24/200
+15/200
 
 
 
@@ -468,6 +481,7 @@ replicated_regression <- replicate(n = 50,
                                    expr = map(events_to_keep2, possibly(sparse_regression,
                                                                         otherwise = list(rsquare=NA_real_,nb_coefs=NA_real_))),
                                    simplify = FALSE)
+qs::qsave(replicated_regression, "data/intermediates/230113_replicated_regression_log_cache.qs")
 
 replicated_rsquare <- map(replicated_regression,
                           \(replicate) {
@@ -485,6 +499,7 @@ ggplot(replicated_rsquare,
        aes(x = event_id, y = Rsquare_adjusted)) +
   theme_classic() +
   # geom_violin(fill = 'grey95') +
+  geom_boxplot(fill = 'grey90') +
   geom_point() +
   theme(
     axis.text.x = element_text(
@@ -614,7 +629,7 @@ overlap_intersected_coefs <- intersected_coefs |>
 
 sum(overlap_intersected_coefs$nb_sf_overlap)
 sum(overlap_intersected_coefs$nb_sf_known)
-22/482
+25/482
 
 
 
@@ -625,4 +640,12 @@ rep_overlap <- replicate(500,
 
 hist(rep_overlap, breaks = 30, xlab = "Number of overlapping interactions under randomization",main = NULL); abline(v = 22, col = 'red')
 
+
+
+
+
+# Select only good fits
+
+hist(replicated_rsquare$Rsquare_adjusted, breaks = 800, xlim = c(.48,.52))
+table(replicated_rsquare$Rsquare_adjusted > .51)
 
