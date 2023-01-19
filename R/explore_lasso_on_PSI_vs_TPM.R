@@ -497,7 +497,7 @@ table(randomized_overlaps >= sum(overlaps_sf$nb_overlapping_sf))
 # qs::qsave(replicated_regression, "data/intermediates/230117_replicated_regression_log_cache_filt.qs")
 
 
-replicated_regression <- qs::qread("data/intermediates/230113_replicated_regression_log_cache.qs")
+replicated_regression <- qs::qread("data/intermediates/230117_replicated_regression_log_cache_filt.qs")
 
 replicated_rsquare <- map(replicated_regression,
                           \(replicate) {
@@ -549,7 +549,7 @@ replicated_coefs <- imap(replicated_regression,
                          \(replicate, ind) {
                            map2(replicate, events_to_keep,
                                 \(rep, .event_id) {
-                                  pluck(rep, "coefs_sf", .default = NA) |>
+                                  pluck(rep, "coefs_sf", .default = tibble()) |>
                                     add_column(event_id = .event_id)
                                 }) |>
                              list_rbind() |>
@@ -687,20 +687,6 @@ pluck(replicated_regression[[45]][[25]],"coefs_sf", .default = tibble()) |>
 length(replicated_regression[[45]])
 events_to_keep[24:26]
 
-replicated_coefs <- imap(replicated_regression,
-                         \(replicate, ind) {
-                           map2(replicate, events_to_keep,
-                                \(rep, .event_id) {
-                                  pluck(rep, "coefs_sf", .default = tibble()) |>
-                                    add_column(event_id = .event_id)
-                                }) |>
-                             list_rbind() |>
-                             add_column(replicate = paste0("replicate_", ind))
-                         }) |>
-  list_rbind()
-
-
-
 
 
 filt_replicated_coefs <- replicated_coefs |>
@@ -760,6 +746,32 @@ hist(rep_overlap, breaks = 10,
      main = NULL); abline(v = 50, col = 'red')
 
 #> not better
+
+
+
+
+
+# Find stable coefficients ----
+coefs_stability <- replicated_coefs |>
+  group_by(event_id, transcript_id) |>
+  summarize(median = median(s1),
+            mean = mean(s1),
+            mad = mad(s1),
+            sd = sd(s1),
+            .groups = "drop")
+
+ggplot(coefs_stability) +
+  theme_classic() +
+  geom_point(aes(x = median, y = mad))
+
+ggplot(coefs_stability) +
+  theme_classic() +
+  geom_point(aes(x = mean, y = sd))
+
+plot(x = coefs_stability$mean, y = coefs_stability$sd)
+plot(x = coefs_stability$median, y = coefs_stability$mad)
+
+
 
 
 
