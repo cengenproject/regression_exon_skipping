@@ -246,8 +246,10 @@ plot(pcdf[,1:2])
 # qs::qsave(quantifs, "data/intermediates/230117_quantifs_filtered.qs")
 # 
 # qs::qsave(all_tx_expression, "data/intermediates/230117_tx_filtered.qs")
-
-
+# 
+# write_tsv(quantifs, "data/intermediates/230119_PSI_quantifications.tsv")
+# write_tsv(all_tx_expression, "data/intermediates/230119_transcripts_expression.tsv.gz")
+# 
 
 
 
