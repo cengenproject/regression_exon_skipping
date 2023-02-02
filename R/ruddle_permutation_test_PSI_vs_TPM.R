@@ -39,7 +39,7 @@ sf_expression <- qs::qread("data/intermediates/230117_tx_filtered.qs") |>
 
 
 
-events_coordinates <- read_tsv("data/export_for_arman/221111_events_coordinates.tsv")
+events_coordinates <- read_tsv("data/intermediates/221111_events_coordinates.tsv")
 
 
 # Filter events ----
