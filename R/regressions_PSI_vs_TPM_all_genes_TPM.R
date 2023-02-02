@@ -1,5 +1,6 @@
 
 # Perform regression with different methods. Combination of explore_lasso_on_PSI_vs_TPM and explore_adaptive_lasso_on_PSI_vs_TPM
+# this time, use all genes, see if we extract known SFs
 
 
 # Inits ----
@@ -27,7 +28,7 @@ putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
 #   mutate(gene_name = i2s(gene_id, gids, warn_missing = TRUE))
 
 sf_expression <- qs::qread("data/intermediates/230117_tx_filtered.qs") |>
-  filter(gene_id %in% putative_splice_factors) |>
+  # filter(gene_id %in% putative_splice_factors) |>
   mutate(gene_name = i2s(gene_id, gids, warn_missing = TRUE))
 
 sf_tx2g <- sf_expression |>
@@ -145,6 +146,24 @@ quantifs_filtered$inclusion <- cut(quantifs_filtered$PSI,
 quantifs_filtered_binary <- quantifs_filtered |>
   filter(inclusion != "mix")
 
+
+# Filter tx expression ----
+
+# xx <- sf_expression |>
+#   group_by(transcript_id) |>
+#   summarize(nb_samples = n(),
+#             mean = mean(TPM),
+#             sd = sd(TPM))
+# 
+# table(xx$nb_samples, useNA = 'ifany')
+# sum(is.na(sf_expression$TPM))
+# 
+# ggplot(xx) +
+#   theme_classic() +
+#   geom_point(aes(x = mean, y = sd)) +
+#   scale_x_log10() + scale_y_log10()
+
+#> no criterion to filter anything out
 
 
 
@@ -436,11 +455,11 @@ regression_multinomial_lasso <- function(my_ev, mat_sf_expression, quants){
     predicted = predict(cvfit, newx = x[-train,], s = "lambda.min", type = "class"),
     measured = y[-train]
   )
-
+  
   TPR <- sum(prediction_on_test$predicted == prediction_on_test$measured)/nrow(prediction_on_test)
   
-
-    
+  
+  
   coefs_sf <- coef(cvfit, s = "lambda.min") |>
     imap(\(.x, .i) as.matrix(.x) |>
            as_tibble(rownames = "transcript_id") |>
@@ -467,6 +486,8 @@ regression_multinomial_lasso <- function(my_ev, mat_sf_expression, quants){
 # SE_136, SE_303 are good. 1060 particularly
 (my_ev <- sample(events_to_keep_all, 1))
 # my_ev <- "SE_1046"
+
+events_coordinates |> filter(event_id== my_ev) |> pull(gene_id) |> i2s(gids)
 
 quantifs |>
   filter(event_id == my_ev) |>
@@ -578,6 +599,34 @@ reg_adalasso$coefs_sf |>
       vjust = 0.5
     )) 
 
+
+# Check against putative SFs
+
+
+
+xx <- reg_lasso$coefs_sf |>
+  filter(transcript_id != "(Intercept)") |>
+  mutate(gene_id = convert_sf_tx2g(transcript_id),
+         putative_sf = gene_id %in% putative_splice_factors)
+
+ggplot(xx) +
+  theme_classic() +
+  # geom_boxplot(aes(x = putative_sf, y = s1))
+  geom_jitter(aes(x = putative_sf, y = s1), alpha = .2)
+
+xx |>
+  filter(s1 != 0) |>
+  ggplot() +
+  theme_classic() +
+  geom_jitter(aes(x = putative_sf, y = s1))
+
+eulerr::euler(list(lasso = unique(xx$gene_id[xx$s1 != 0]),
+                   literature = putative_splice_factors)) |>
+  plot(quantities = TRUE)
+
+
+
+## Continue
 reg_loglasso$coefs_sf |>
   filter(s1 != 0) |>
   left_join(sf_tx2g,
@@ -612,10 +661,20 @@ reg_multilasso$coefs_sf |>
 list(lasso    = reg_lasso$coefs_sf |>  filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
      adalasso = reg_adalasso$coefs_sf |> filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
      logistic = reg_loglasso$coefs_sf |> filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
-     multinomial = reg_multilasso$coefs_sf |> filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)")) |>
+     multinomial = reg_multilasso$coefs_sf |> filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
+     literature = putative_splice_factors) |>
   eulerr::euler() |>
   plot(quantities = TRUE)
 
+
+
+list(lasso    = reg_lasso$coefs_sf |>  filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
+     adalasso = reg_adalasso$coefs_sf |> filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
+     logistic = reg_loglasso$coefs_sf |> filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
+     multinomial = reg_multilasso$coefs_sf |> filter(s1 != 0) |> pull(transcript_id) |> setdiff("(Intercept)"),
+     literature = putative_splice_factors) |>
+  UpSetR::fromList() |>
+  UpSetR::upset()
 
 
 
@@ -642,10 +701,10 @@ first_pass_regression <- quantifs_filtered |>
                                            otherwise = list(NA))(ev, mat_sf_expression, quantifs_filtered_binary),
                             .progress = TRUE),
          fit_multlasso = map(event_id,
-                            \(ev) possibly(regression_multinomial_lasso,
-                                           otherwise = list(NA))(ev, mat_sf_expression, quantifs_filtered),
-                            .progress = TRUE))
-# qs::qsave(first_pass_regression, "data/intermediates/230125_fits_for_quantifs_4methods_cache.qs")
+                             \(ev) possibly(regression_multinomial_lasso,
+                                            otherwise = list(NA))(ev, mat_sf_expression, quantifs_filtered),
+                             .progress = TRUE))
+# qs::qsave(first_pass_regression, "data/intermediates/230130_fits_for_quantifs_4methods_allgenes_cache.qs")
 
 
 first_pass_regression <- qs::qread("data/intermediates/230125_fits_for_quantifs_4methods_cache.qs")
@@ -713,6 +772,8 @@ patchwork::wrap_plots(
 
 
 first_pass_regression |>
+  mutate(lasso_rsquare = map_dbl(fit_lasso, ~ pluck(., "rsquare", .default = NA_integer_)),
+         adalasso_rsquare = map_dbl(fit_adalasso, ~ pluck(., "rsquare", .default = NA_integer_))) |>
   select(event_id, ends_with("_rsquare")) |>
   pivot_longer(-event_id, names_to = "method", values_to = "rsquare", names_pattern = "(a?d?a?lasso)_rsquare") |>
   ggplot(aes(x = method, y = rsquare)) +
@@ -720,13 +781,24 @@ first_pass_regression |>
   geom_boxplot() +
   ggbeeswarm::geom_beeswarm()
 
-first_pass_regression |>
+xx <- first_pass_regression |>
+  mutate(lasso_coefs_sf = map(fit_lasso, ~ pluck(., "coefs_sf", .default = tibble())),
+         adalasso_coefs_sf = map(fit_adalasso, ~ pluck(., "coefs_sf", .default = tibble())),
+         loglasso_coefs_sf = map(fit_loglasso, ~ pluck(., "coefs_sf", .default = tibble())),
+         multlasso_coefs_sf = map(fit_multlasso, ~ pluck(., "coefs_sf", .default = tibble()))) |>
   select(event_id, ends_with("_coefs_sf")) |>
-  pivot_longer(-event_id, names_to = "method", values_to = "coefs", names_pattern = "(a?d?a?lasso)_coefs_sf") |>
+  pivot_longer(-event_id, names_to = "method", values_to = "coefs", names_pattern = "([admultog]{0,4}lasso)_coefs_sf") |>
   unnest(coefs) |>
   filter(s1 != 0,
-         transcript_id != "(Intercept)") |>
-  ggplot(aes(x = transcript_id, y = s1)) +
+         transcript_id != "(Intercept)")
+  
+xx |>
+  ggplot(aes(x = method, y = abs(s1))) +
+  theme_classic() +
+  geom_boxplot() +
+  scale_y_log10()
+
+ggplot(xx, aes(x = transcript_id, y = s1)) +
   theme_classic() +
   geom_boxplot() +
   facet_wrap(~ method)
