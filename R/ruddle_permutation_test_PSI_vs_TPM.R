@@ -172,11 +172,7 @@ perm_p_val <- regression_permutations |>
 
 perm_res <- left_join(perm_effect_size,
           perm_p_val,
-          by = c("event_id", "transcript_id")) |>
-  mutate(sf_id = convert_sf_tx2g(transcript_id),
-         target_id = convert_event2_gene_id(event_id),
-         sf_name = i2s(sf_id, gids, warn_missing = TRUE),
-         target_name = i2s(target_id, gids, warn_missing = TRUE))
+          by = c("event_id", "transcript_id"))
 
 qs::qsave(perm_res, out_file2)
 
