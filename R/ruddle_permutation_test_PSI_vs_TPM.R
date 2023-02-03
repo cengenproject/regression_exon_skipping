@@ -9,6 +9,7 @@
 # copied from regressions_PSI_vs_TPM_deltaPSI.R to run this part on Ruddle with many replicates
 
 
+cat("Starting at ",date(),"\n")
 
 # Inits ----
 
@@ -22,7 +23,8 @@ plan(multicore, workers = 10)
 source("R/regression_functions.R")
 
 
-out_file <- "data/intermediates/230202_regression_permutations_.qs"
+out_file <- "data/intermediates/230203_regression_permutations_dpsi.qs"
+out_file2 <- "data/intermediates/230203_regression_permutations_dpsi_res.qs"
 
 
 # Read data ----
@@ -114,12 +116,12 @@ mat_sf_expression <- mat_sf_expression[,! apply(mat_sf_expression, 2, \(col) any
 
 
 ####  Using permutation testing ----
+cat("Main tests\n")
 
-
-regression_permutations <- expand_grid(event_id = sample(unique(quantifs_filtered$event_id), 3),
+regression_permutations <- expand_grid(event_id = unique(quantifs_filtered$event_id),
                                        method = c("lasso"),
-                                       column = c("PSI"),
-                                       shuffle = c(FALSE, rep(TRUE, 3))) |>
+                                       column = c("dPSI_nat"),
+                                       shuffle = c(FALSE, rep(TRUE, 1000))) |>
   mutate(res = future_pmap(list(event_id, method, column, shuffle),
                     \(event_id, method, column, shuffle) sparse_regression(event_id, method, column,
                                                                            shuffle, mat_sf_expression, quantifs_filtered),
@@ -131,7 +133,52 @@ regression_permutations <- expand_grid(event_id = sample(unique(quantifs_filtere
          coefs_sf = map(res, ~pluck(.x, "coefs_sf", .default = tibble()))) |>
   select(-res)
 
-# qs::qsave(regression_permutations, out_file)
+qs::qsave(regression_permutations, out_file)
+
+cat("Done, postprocessing\n")
+
+perm_effect_size <- regression_permutations |>
+  select(event_id, shuffle, coefs_sf) |>
+  unnest(coefs_sf) |>
+  group_by(shuffle, event_id, transcript_id) |>
+  summarize(mean_s = mean(s1),
+            .groups = "drop") |>
+  pivot_wider(c(event_id, transcript_id),
+              names_from = "shuffle",
+              values_from = "mean_s") |>
+  rename(coef = `FALSE`,
+         mean_null = `TRUE`) |>
+  mutate(coef_effect_size = coef - mean_null)
 
 
-cat("Done, saved in ", out_file)
+
+
+perm_p_val <- regression_permutations |>
+  select(event_id, shuffle, coefs_sf) |>
+  unnest(coefs_sf) |>
+  pivot_wider(c(event_id, transcript_id),
+              names_from = "shuffle",
+              values_from = "s1",
+              values_fn = list) |>
+  rename(coef = `FALSE`,
+         coefs_null = `TRUE`) |>
+  rowwise() |>
+  mutate(p_val = sum(abs(coefs_null) >= abs(coef))/length(coefs_null)) |>
+  ungroup() |>
+  mutate(p_adj = p.adjust(p_val, "BH")) |>
+  select(event_id, transcript_id, p_val, p_adj)
+
+
+
+perm_res <- left_join(perm_effect_size,
+          perm_p_val,
+          by = c("event_id", "transcript_id")) |>
+  mutate(sf_id = convert_sf_tx2g(transcript_id),
+         target_id = convert_event2_gene_id(event_id),
+         sf_name = i2s(sf_id, gids, warn_missing = TRUE),
+         target_name = i2s(target_id, gids, warn_missing = TRUE))
+
+qs::qsave(perm_res, out_file2)
+
+cat("Done at ", date(),"\nsaved in ", out_file)
+
