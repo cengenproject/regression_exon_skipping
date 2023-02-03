@@ -111,6 +111,23 @@ mat_sf_expression <- sf_expression |>
 mat_sf_expression <- mat_sf_expression[,! apply(mat_sf_expression, 2, \(col) any(is.na(col)))]
 
 
+# Predict DeltaPSI instead of PSI
+# see https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02273-7#Sec9 for rationale
+
+logit <- function(x){
+  stopifnot(all(x >= 0 & x <= 1))
+  x[x == 0] <- .01
+  x[x == 1] <- .99
+  log(x/(1-x))
+}
+
+quantifs_filtered <- quantifs_filtered |>
+  group_by(event_id) |>
+  mutate(dPSI_nat = PSI - mean(PSI),
+         dPSI_logit = logit(PSI) - logit(mean(PSI)))
+
+
+
 
 
 
