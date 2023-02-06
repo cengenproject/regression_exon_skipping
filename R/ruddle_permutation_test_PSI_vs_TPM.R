@@ -24,7 +24,6 @@ source("R/regression_functions.R")
 
 
 out_file <- "data/intermediates/230203_regression_permutations_dpsi.qs"
-out_file2 <- "data/intermediates/230203_regression_permutations_dpsi_res.qs"
 
 
 # Read data ----
@@ -150,9 +149,8 @@ regression_permutations <- expand_grid(event_id = unique(quantifs_filtered$event
          coefs_sf = map(res, ~pluck(.x, "coefs_sf", .default = tibble()))) |>
   select(-res)
 
-qs::qsave(regression_permutations, out_file)
 
-cat("Done, postprocessing\n")
+cat("Main loop done. Postprocessing\n")
 
 perm_effect_size <- regression_permutations |>
   select(event_id, shuffle, coefs_sf) |>
@@ -191,7 +189,7 @@ perm_res <- left_join(perm_effect_size,
           perm_p_val,
           by = c("event_id", "transcript_id"))
 
-qs::qsave(perm_res, out_file2)
+qs::qsave(perm_res, out_file)
 
 cat("Done at ", date(),"\nsaved in ", out_file)
 
