@@ -35,15 +35,15 @@ regression_wrapper <- function(my_ev, regression_method, column, shuffle, mat_sf
   fit <- get(regression_method)(x[train,], y[train], nfolds = 20)
   
   # Estimate on test data
-  prediction_on_test <- predict(fit, newx = x[-train,], s = "lambda.min") |>
+  prediction_on_test <- predict(fit, newx = x[-train,], s = "lambda.1se") |>
     as.data.frame() |>
     as_tibble(rownames = "sample_id") |>
-    rename(predicted = lambda.min) |>
+    rename(predicted = lambda.1se) |>
     add_column(measured = y[-train])
   
   rsquare <- summary(lm(predicted ~ measured, data = prediction_on_test))$adj.r.squared
   
-  coefs_sf <- coef(fit, s = "lambda.min") |>
+  coefs_sf <- coef(fit, s = "lambda.1se") |>
     as.matrix() |>
     as_tibble(rownames = "transcript_id")
   
