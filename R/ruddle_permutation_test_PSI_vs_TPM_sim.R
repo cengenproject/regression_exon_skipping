@@ -24,14 +24,16 @@ plan(multicore, workers = 10)
 source("R/regression_functions.R")
 
 
-out_file <- "data/intermediates/230203_sim1_regression_permutations_psi.qs"
+COLUMN <- "PSI"
+
+out_file <- "data/intermediates/230203_sim2_regression_permutations_psi.qs"
 
 
 # Read data ----
 
 
-quantifs <- qs::qread("data/intermediates/simultation/230206_quantifs_simulation1.qs")
-sf_expression <- qs::qread("data/intermediates/simultation/230206_sf_simulation1.qs")
+quantifs <- qs::qread("data/intermediates/simultation/230206_quantifs_simulation2.qs")
+sf_expression <- qs::qread("data/intermediates/simultation/230206_sf_simulation2.qs")
 
 
 
@@ -83,7 +85,7 @@ cat("Main tests\n")
 
 regression_permutations <- expand_grid(event_id = unique(quantifs_filtered$event_id),
                                        method = c("lasso"),
-                                       column = c("dPSI_nat"),
+                                       column = c(COLUMN),
                                        shuffle = c(FALSE, rep(TRUE, 1000))) |>
   mutate(res = future_pmap(list(event_id, method, column, shuffle),
                            \(event_id, method, column, shuffle) sparse_regression(event_id, method, column,

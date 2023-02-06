@@ -11,5 +11,5 @@
 echo "---------------  Running R script splice_graph.R ---------------------"
 
 module load R
-R --slave -f R/ruddle_permutation_test_PSI_vs_TPM.R
+R --slave -f R/ruddle_permutation_test_PSI_vs_TPM_sim.R
 
