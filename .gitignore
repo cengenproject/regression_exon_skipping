@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+data/*
+logs/*
