@@ -26,14 +26,14 @@ source("R/regression_functions.R")
 
 COLUMN <- "PSI"
 
-out_file <- "data/intermediates/230203_sim2_regression_permutations_psi.qs"
+out_file <- "data/intermediates/230203_sim1_regression_permutations_psi_1se.qs"
 
 
 # Read data ----
 
 
-quantifs <- qs::qread("data/intermediates/simultation/230206_quantifs_simulation2.qs")
-sf_expression <- qs::qread("data/intermediates/simultation/230206_sf_simulation2.qs")
+quantifs <- qs::qread("data/intermediates/simultation/230206_quantifs_simulation1.qs")
+sf_expression <- qs::qread("data/intermediates/simultation/230206_sf_simulation1.qs")
 
 
 

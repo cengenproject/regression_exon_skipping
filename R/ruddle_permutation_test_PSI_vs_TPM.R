@@ -22,8 +22,9 @@ plan(multicore, workers = 10)
 
 source("R/regression_functions.R")
 
+COLUMN <- "PSI"
 
-out_file <- "data/intermediates/230203_regression_permutations_dpsi.qs"
+out_file <- "data/intermediates/230203_regression_permutations_psi_1se_b.qs"
 
 
 # Read data ----
@@ -136,7 +137,7 @@ cat("Main tests\n")
 
 regression_permutations <- expand_grid(event_id = unique(quantifs_filtered$event_id),
                                        method = c("lasso"),
-                                       column = c("dPSI_nat"),
+                                       column = c(COLUMN),
                                        shuffle = c(FALSE, rep(TRUE, 1000))) |>
   mutate(res = future_pmap(list(event_id, method, column, shuffle),
                     \(event_id, method, column, shuffle) sparse_regression(event_id, method, column,
