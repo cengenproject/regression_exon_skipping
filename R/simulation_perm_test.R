@@ -1,4 +1,26 @@
+
+## ARCHIVE
+
+
 # Simulation to check whether the permutation test gives results that make sense
+
+# While the simulated data appears good enough at first, it has deviations from
+# the real data (e.g. the PSI distribution has a peak at 0, and a small peak at 0.5),
+# so replacing with new script, see `simulation2.R`
+
+
+# Model in this script:
+# Keep measured TPMs, just randomize them
+# For each event, select 5 transcripts non-zero, all other coefficients 0
+# For these 5 “true non-0” transcripts, coefficient from Norm(mu=0, sd=1)
+# Compute simulated
+# PSI = logistic( sum(coef * TPM) + eps )
+# where eps from Norm(mu = 0, sd = 0.2), logistic with k=0.05
+# Create 100 simulated datasets
+# 
+# Note: in model, use scaled-centered log-TPM
+
+
 
 
 
