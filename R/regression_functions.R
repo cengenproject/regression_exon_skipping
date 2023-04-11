@@ -17,7 +17,7 @@ regression_wrapper <- function(my_ev, regression_method, column, shuffle, mat_sf
   # get y data
   y <- quants[quants$event_id == my_ev, c("sample_id", column)] |>
     column_to_rownames("sample_id") |>
-    filter(!is.na({{column}})) |>
+    filter(!is.na(.data[[column]])) |>
     as.matrix()
   
   # get x data
