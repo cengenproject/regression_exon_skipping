@@ -21,13 +21,16 @@
 
 library(tidyverse)
 
-# read filtered objects to generate simulations from
+# read filtered objects with real data to generate simulations from
 quantifs_filtered <- qs::qread("data/intermediates/simultation/230206_preprocessed_quantifs_filtered.qs")
 sf_expression <- qs::qread("data/intermediates/simultation/230206_preprocessed_sf_expression.qs")
 
 
 
-# a look at the real (measured) data: assuming it's from a NB distribution
+
+
+# Parameters of real data ----
+
 counts_measured <- quantifs_filtered |>
   mutate(Nincl = round(PSI * nb_reads),
          Nexcl = round((1-PSI) * nb_reads)) |>
@@ -42,7 +45,6 @@ fit <- map(counts_measured$data,
   set_names(paste0(counts_measured$event_id,"_",counts_measured$contribution))
 
 
-
 all_fits_res <- fit |>
   imap(~ tibble(name = .y, mu = .x$estimate[["mu"]], size = .x$estimate[["size"]])) |>
   list_rbind() |>
@@ -50,112 +52,8 @@ all_fits_res <- fit |>
           into = c("event_id", "contribution"),
           regex = "^(SE_[[:digit:]]{1,4})_(Nincl|Nexcl)$")
 
-all_fits_res |>
-  pivot_longer(c(mu, size), names_to = "parameter",values_to = "value") |>
-  ggplot() + theme_classic() +
-  geom_density(aes(x = value, fill = contribution), alpha = .2) +
-  scale_x_log10() +
-  facet_wrap(~parameter) +
-  geom_vline(aes(xintercept = median),
-             data = tibble(parameter = c("mu", "size"),
-                           median = c(median(all_fits_res$mu), median(all_fits_res$size))))
 
-# fit log-normal to mu and size
-
-
-fit_mu <- fitdistrplus::fitdist(data = all_fits_res$mu,
-                      distr = "lnorm")
-fit_mu
-
-summary(fit_mu)
-plot(fit_mu, breaks = 50)
-
-xx <- hist(all_fits_res$mu, freq = FALSE, breaks = 110)
-lines(xx$breaks, dlnorm(xx$breaks, meanlog = 3.8532999, sdlog = 0.9620221), col = 'red3', lwd=2)
-hist(rlnorm(1000, meanlog = 3.8532999, sdlog = 0.9620221), breaks = 100)
-
-
-xx <- hist(log(all_fits_res$mu), freq = FALSE, breaks = 110)
-lines(xx$breaks, dlnorm(exp(xx$breaks), meanlog = 3.8532999, sdlog = 0.9620221), col = 'red3', lwd=2)
-
-
-
-
-n <- nrow(all_fits_res)
-tibble(type = c(rep("measured", n), rep("simul", n)),
-       value = c(log(all_fits_res$mu), log(rlnorm(n, 3.8532999, 0.9620221)))) |>
-  ggplot() + theme_classic() +
-  geom_density(aes(x = value, fill = type), alpha = .3) +
-  scale_x_log10()
-
-
-fit_size <- fitdistrplus::fitdist(data = all_fits_res$size,
-                                distr = "lnorm")
-fit_size
-
-summary(fit_size)
-plot(fit_size)
-
-
-
-# simulate single
-nb_reads_per_event <- quantifs_filtered |>
-  group_by(event_id) |>
-  summarize(typical_nb_reads = mean(nb_reads/2)) |>
-  mutate(typical_nb_reads = sample(typical_nb_reads))
-sim_quantifs <- quantifs_filtered |>
-  select(event_id, sample_id)
-sim_sf <- sf_expression |>
-  select(transcript_id, sample_id) |>
-  mutate(TPM = sample(sf_expression$TPM))
-
-n_tx <- length(unique(sim_sf$transcript_id))
-true_coefs <- expand_grid(event_id = unique(sim_quantifs$event_id),
-                          contribution = c("inclusion", "exclusion"),
-                          transcript_id = unique(sim_sf$transcript_id)) |>
-  group_by(event_id, contribution) |>
-  nest() |>
-  mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(rep(0, n_tx - 3), rnorm(3)))))) |>
-  unnest(data) |> ungroup()
-
-xx <- sim_quantifs_prod <- sim_quantifs |>
-  left_join(nb_reads_per_event, by = "event_id") |>
-  full_join(sim_sf, by = "sample_id", multiple = "all") |>
-  left_join(true_coefs, by = c("event_id", "transcript_id"), multiple = "all") |>
-  group_by(event_id, sample_id, contribution, typical_nb_reads)
-
-aa <- xx |>
-  summarize(val = sum((true_coef*log1p(TPM))),
-            .groups = 'drop')
-  
-bb <- aa |>
-  mutate(val_center_scale = 0.9620221*(val)/sd(val)+3.8532999,
-         val_lnorm = exp(val_center_scale),
-         N = rnbinom(n = nrow(aa),
-                         size = rlnorm(nrow(aa), meanlog = 0.3195156, sdlog = 0.5254811),
-                         mu = val_lnorm)) |>
-  pivot_wider(c(event_id, sample_id),
-              names_from = "contribution",
-              values_from = "N") |>
-  # mutate(PSI = inclusion / (inclusion + exclusion))
-  mutate(PSI = inclusion / (inclusion + exclusion) + rnorm(n, 0.02,0.02),
-         PSI = if_else(PSI>1, 1, if_else(PSI<0,0, PSI)))
-
-n <- nrow(quantifs_filtered)
-tibble(type = c(rep("measured", n), rep("simul", n)),
-       value = c(quantifs_filtered$PSI, bb$PSI)) |>
-  ggplot() + theme_classic() +
-  geom_density(aes(x = value, fill = type), alpha = .3, bw = .01)
-
-tibble(type = c(rep("measured", n), rep("simul", n)),
-       value = c(quantifs_filtered$PSI, bb$PSI)) |>
-  ggplot() + theme_classic() +
-  geom_freqpoly(aes(x = value, color = type))
-
-
-
-
-### Separate Nincl and Nexcl ----
+# Separate Nincl and Nexcl
 
 
 all_fits_res |>
@@ -168,34 +66,30 @@ all_fits_res |>
              data = tibble(parameter = c("mu", "size"),
                            median = c(median(all_fits_res$mu), median(all_fits_res$size))))
 
-# fit log-normal to mu and size
+
+# fit log-normals to mu and size
 
 
 fit_mu_incl <- fitdistrplus::fitdist(data = all_fits_res |> filter(contribution == "Nincl") |> pull(mu),
-                                distr = "lnorm")
-fit_mu_incl
-
+                                     distr = "lnorm")
 plot(fit_mu_incl, breaks = 50)
 
 
 
 fit_mu_excl <- fitdistrplus::fitdist(data = all_fits_res |> filter(contribution == "Nexcl") |> pull(mu),
                                      distr = "lnorm")
-fit_mu_excl
-
 plot(fit_mu_excl, breaks = 50)
 
 
 
 fit_size_incl <- fitdistrplus::fitdist(data = all_fits_res |> filter(contribution == "Nincl") |> pull(size),
-                                  distr = "lnorm")
-fit_size_incl
+                                       distr = "lnorm")
 plot(fit_size_incl)
 
 fit_size_excl <- fitdistrplus::fitdist(data = all_fits_res |> filter(contribution == "Nexcl") |> pull(size),
                                        distr = "lnorm")
-fit_size_excl
 plot(fit_size_excl)
+
 
 # Parameters
 #   est    incl       excl
@@ -205,58 +99,111 @@ plot(fit_size_excl)
 # mu   0.9289583  0.9939782    
 # size 0.4031841  0.6169638   
 
+real_data_fit <- list(mu_incl = fit_mu_incl$estimate,
+                      mu_excl = fit_mu_excl$estimate,
+                      size_incl = fit_size_incl$estimate,
+                      size_excl = fit_size_excl$estimate)
+qs::qsave(real_data_fit,
+          "data/intermediates/230411_real_data_fit.qs")
 
-# simulate single
 
-bb2 <- aa |>
-  mutate(val_center_scale = if_else(contribution == "inclusion",
-                                    0.9289583*(val)/sd(val)+3.8503877,
-                                    0.9939782*(val)/sd(val)+3.8562121),
-         val_lnorm = exp(val_center_scale),
-         N = rnbinom(n = nrow(aa),
+# simulate single ----
+
+# prepare simulation data
+real_data_fit <- qs::qread("data/intermediates/230411_real_data_fit.qs")
+
+nb_tx  <- sf_expression |>
+  pull(transcript_id) |>
+  unique() |>
+  length()
+nb_events <- quantifs_filtered |>
+  pull(event_id) |>
+  unique() |>
+  length()
+nb_samples <- quantifs_filtered |>
+  pull(sample_id) |>
+  unique() |>
+  length()
+nb_datapoints <- quantifs_filtered |> nrow()
+
+sim_sf <- sf_expression |>
+  select(transcript_id, sample_id) |>
+  mutate(TPM = sample(sf_expression$TPM))
+
+true_coefs <- expand_grid(event_id = unique(quantifs_filtered$event_id),
+                          contribution = c("inclusion", "exclusion"),
+                          transcript_id = unique(sim_sf$transcript_id)) |>
+  group_by(event_id, contribution) |>
+  nest() |>
+  mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(rep(0, nb_tx - 3), rnorm(3)))))) |>
+  unnest(data) |> ungroup()
+
+# get list of coefficients for each sample, event, transcript, contribution
+randomized_samples <- quantifs_filtered |>
+  select(event_id, sample_id) |>
+  full_join(sim_sf, by = "sample_id", relationship = "many-to-many") |>
+  left_join(true_coefs, by = c("event_id", "transcript_id"), relationship = "many-to-many")
+
+# compute
+
+rescale_distr <- function(x, targets){
+  targets[["sdlog"]] * x/sd(x) + targets[["meanlog"]]
+}
+
+sim_quantifs <- randomized_samples |>
+  group_by(event_id, sample_id, contribution) |>
+  summarize(val = sum((true_coef*log1p(TPM))),
+            .groups = 'drop') |>
+  mutate(val_centerd_scaled = if_else(contribution == "inclusion",
+                                    rescale_distr(val, real_data_fit$mu_incl),
+                                    rescale_distr(val, real_data_fit$mu_excl)),
+         val_lnorm = exp(val_centerd_scaled),
+         N = rnbinom(n = 2*nb_datapoints,
                      size = if_else(contribution == "inclusion",
-                                    rlnorm(nrow(aa), meanlog = 0.3868171, sdlog = 0.4031841),
-                                    rlnorm(nrow(aa), meanlog = 0.2522141, sdlog = 0.6169638)),
+                                    rlnorm(2*nb_datapoints,
+                                           meanlog = real_data_fit$size_incl[["meanlog"]],
+                                           sdlog = real_data_fit$size_incl[["sdlog"]]),
+                                    rlnorm(2*nb_datapoints,
+                                           meanlog = real_data_fit$size_excl[["meanlog"]],
+                                           sdlog = real_data_fit$size_excl[["sdlog"]])),
                      mu = val_lnorm)) |>
-  pivot_wider(c(event_id, sample_id),
+  pivot_wider(id_cols = c(event_id, sample_id),
               names_from = "contribution",
               values_from = "N") |>
-  mutate(inclusion = inclusion + rpois(n, 6),
-         PSI = inclusion / (inclusion + exclusion))
-  # mutate(PSI = inclusion / (inclusion + exclusion) + rnorm(n, 0.02,0.02),
-  #        PSI = if_else(PSI>1, 1, if_else(PSI<0,0, PSI)))
+  mutate(inclusion = inclusion,
+         PSI = inclusion / (inclusion + exclusion),
+         nb_reads = inclusion + exclusion,
+         neuron = str_match(sample_id, "^([A-Z0-9]{2,4})r[0-9]{2,4}$"))
 
-n <- nrow(quantifs_filtered)
-tibble(type = c(rep("measured", n), rep("simul", n)),
-       value = c(quantifs_filtered$PSI, bb2$PSI)) |>
+
+# Compare histograms with real data
+tibble(type = c(rep("measured", nb_datapoints), rep("simul", nb_datapoints)),
+       PSI = c(quantifs_filtered$PSI, sim_quantifs$PSI)) |>
   ggplot() + theme_classic() +
-  geom_density(aes(x = value, fill = type), alpha = .3, bw = .01)
+  geom_density(aes(x = PSI, fill = type), alpha = .3, bw = .01)
 
-tibble(type = c(rep("measured", n), rep("simul", n)),
-       value = c(quantifs_filtered$PSI, bb2$PSI)) |>
+tibble(type = c(rep("measured", nb_datapoints), rep("simul", nb_datapoints)),
+       PSI = c(quantifs_filtered$PSI, sim_quantifs$PSI)) |>
   ggplot() + theme_classic() +
-  geom_freqpoly(aes(x = value, color = type))
+  geom_freqpoly(aes(x = PSI, color = type), bins = 100)
+
+
+tibble(type = c(rep("measured", nb_datapoints), rep("simul", nb_datapoints)),
+       `Total number of reads` = c(quantifs_filtered$nb_reads, sim_quantifs$nb_reads)) |>
+  ggplot() + theme_classic() +
+  geom_density(aes(x = `Total number of reads`, fill = type), alpha = .3, bw = .01) +
+  scale_x_log10()
+
+tibble(type = c(rep("measured", nb_datapoints), rep("simul", nb_datapoints)),
+       `Total number of reads` = c(quantifs_filtered$nb_reads, sim_quantifs$nb_reads)) |>
+  ggplot() + theme_classic() +
+  geom_freqpoly(aes(x = `Total number of reads`, color = type), bins = 100) +
+  scale_x_log10()
 
 
 
-#######
 
 
-
-sim_quantifs_prod <- sim_quantifs |>
-  left_join(nb_reads_per_event, by = "event_id") |>
-  full_join(sim_sf, by = "sample_id", multiple = "all") |>
-  left_join(true_coefs, by = c("event_id", "transcript_id"), multiple = "all") |>
-  group_by(event_id, sample_id, contribution, typical_nb_reads) |>
-  summarize(val = sum((true_coef*log1p(TPM))[true_coef != 0]),
-            .groups = 'drop')
-
-xx <- sim_quantifs |>
-  mutate(val_scaled = (val - min(val))/max(val),
-         lambda = 2 * typical_nb_reads * logistic(val_scaled, k = 0.2, x0 = 5),
-         Nincl = rpois(nrow(sim_quantifs), lambda = lambda),
-         Nexcl = rpois(nrow(sim_quantifs), lambda = lambda),
-         PSI = Nincl / (Nincl + Nexcl))
 
 
 
