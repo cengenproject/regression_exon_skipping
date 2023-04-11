@@ -845,59 +845,102 @@ bind_rows(
 
 
 
-# Simulate 100 datasets -- TODO?
 
+
+
+
+
+
+
+# Simulate 100 datasets ----
+
+
+library(tidyverse)
+
+# unfiltered data
+quantifs <- read_tsv("data/export_for_arman/221110_PSI_quantifications.tsv") |>
+  mutate(neuron_id = str_match(sample_id, "^([A-Z1-9]{2,4})r[0-9]{2,3}$")[,2]) |>
+  filter(! is.na(PSI))
+
+putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
+  filter(keep == 1 | keep == 2) |>
+  pull(gene_id)
+
+sf_expression <- read_tsv("data/export_for_arman/tx_expression.tsv.gz") |>
+  filter(gene_id %in% putative_splice_factors) |>
+  filter(sample_id %in% unique(quantifs$sample_id)) # remove RICr133, Ref, ...
+
+real_data_fit <- qs::qread("data/intermediates/230411_real_data_fit_mu.qs")
+
+
+
+
+rescale_distr <- function(x, targets){
+  targets[["sdlog"]] * x/sd(x) + targets[["meanlog"]]
+}
+
+simulate_single <- function(real_data_fit, sf_expression, quantifs){
+  nb_tx  <- sf_expression |>
+    pull(transcript_id) |>
+    unique() |>
+    length()
+  
+  nb_datapoints <- quantifs |> nrow()
+  
+  sim_sf <- sf_expression |>
+    select(transcript_id, sample_id) |>
+    mutate(TPM = sample(sf_expression$TPM),
+           neuron_id = str_match(sample_id, "^([A-Z0-9]{2,4})r[0-9]{2,4}$")[,2])
+  
+  true_coefs <- expand_grid(event_id = unique(quantifs$event_id),
+                            contribution = c("inclusion", "exclusion"),
+                            transcript_id = unique(sim_sf$transcript_id)) |>
+    group_by(event_id, contribution) |>
+    nest() |>
+    mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(rep(0, nb_tx - 3), rnorm(3)))))) |>
+    unnest(data) |> ungroup()
+  
+  # get list of coefficients for each sample, event, transcript, contribution
+  randomized_samples <- quantifs |>
+    select(event_id, sample_id) |>
+    full_join(sim_sf, by = "sample_id", relationship = "many-to-many") |>
+    left_join(true_coefs, by = c("event_id", "transcript_id"), relationship = "many-to-many")
+  
+  
+  # compute
+  sim_quantifs <- randomized_samples |>
+    group_by(event_id, sample_id, contribution) |>
+    summarize(val = sum((true_coef*log1p(TPM))),
+              .groups = 'drop') |>
+    mutate(val_centerd_scaled = if_else(contribution == "inclusion",
+                                        rescale_distr(val, real_data_fit$mu_incl),
+                                        rescale_distr(val, real_data_fit$mu_excl)),
+           val_lnorm = exp(val_centerd_scaled),
+           N = rnbinom(n = 2*nb_datapoints,
+                       size = if_else(contribution == "inclusion",
+                                      sample(real_data_fit$size_incl, size = 2*nb_datapoints, replace = TRUE),
+                                      sample(real_data_fit$size_excl, size = 2*nb_datapoints, replace = TRUE)),
+                       mu = val_lnorm)) |>
+    pivot_wider(id_cols = c(event_id, sample_id),
+                names_from = "contribution",
+                values_from = "N") |>
+    mutate(inclusion = inclusion,
+           PSI = inclusion / (inclusion + exclusion),
+           nb_reads = inclusion + exclusion,
+           neuron_id = str_match(sample_id, "^([A-Z0-9]{2,4})r[0-9]{2,4}$")[,2])
+  
+  list(sim_quantifs = sim_quantifs, sim_sf = sim_sf, true_coefs = true_coefs)
+}
+
+# 20s per replicate, 30' for 100
 sim_replicated <- replicate(100,
-                            {sim_quantifs <- quantifs_filtered |>
-                              select(event_id, sample_id)
-                            
-                            sim_sf <- sf_expression |>
-                              select(transcript_id, sample_id) |>
-                              mutate(TPM = sample(sf_expression$TPM))
-                            
-                            n_tx <- length(unique(sim_sf$transcript_id))
-                            
-                            true_coefs <- expand_grid(event_id = unique(sim_quantifs$event_id),
-                                                      transcript_id = unique(sim_sf$transcript_id)) |>
-                              group_by(event_id) |>
-                              nest() |>
-                              mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(rep(0, n_tx - 5), rnorm(5)))))) |>
-                              unnest(data) |> ungroup()
-                            
-                            
-                            sim_quantifs <- sim_quantifs |>
-                              left_join(sim_sf, by = "sample_id") |>
-                              left_join(true_coefs, by = c("event_id", "transcript_id")) |>
-                              group_by(event_id, sample_id) |>
-                              summarize(PSI = sum(true_coef*TPM),
-                                        .groups = 'drop') |>
-                              mutate(PSI = PSI + rnorm(length(PSI), mean = 0, sd = .2),
-                                     PSI = logistic(PSI, k = .05))
-                            list(sim_quantifs = sim_quantifs, sim_sf = sim_sf, true_coefs = true_coefs)
-                            },
+                            simulate_single(real_data_fit, sf_expression, quantifs),
                             simplify = FALSE)
 
 
-# qs::qsave(sim_replicated, "data/intermediates/simultation/230206_rep_simulations.qs")
+# qs::qsave(sim_replicated, "data/intermediates/230411_simulation/rep_simulations.qs")
 
-bind_rows(
-  quantifs_filtered |>
-    select(ends_with("_id"), PSI) |>
-    add_column(type = "measured"),
-  sim_replicated[[2]][[1]] |>
-    select(ends_with("_id"), PSI) |>
-    mutate(neuron_id = str_match(sample_id, "^([A-Z0-9]+)r[0-9]+$")[,2]) |>
-    add_column(type = "simulated")) |>
-  ggplot() +
-  theme_classic() +
-  geom_freqpoly(aes(x = PSI, color = type), bins = 100)
 
-# Export 2 replicates for permutation tests
-# qs::qsave(sim_replicated[[45]]$sim_quantifs, "data/intermediates/simultation/230206_quantifs_simulation1.qs")
-# qs::qsave(sim_replicated[[45]]$sim_sf, "data/intermediates/simultation/230206_sf_simulation1.qs")
-# 
-# qs::qsave(sim_replicated[[10]]$sim_quantifs, "data/intermediates/simultation/230206_quantifs_simulation2.qs")
-# qs::qsave(sim_replicated[[10]]$sim_sf, "data/intermediates/simultation/230206_sf_simulation2.qs")
 
 
 
@@ -912,7 +955,7 @@ source("R/regression_functions.R")
 
 
 # Read data ----
-sim_replicated <- qs::qread("data/intermediates/simultation/230206_rep_simulations.qs")
+sim_replicated <- qs::qread("data/intermediates/230411_simulation/sim_sf.qs")
 
 sim_quantifs <- list_transpose(sim_replicated)[["sim_quantifs"]]
 sim_sf <- list_transpose(sim_replicated)[["sim_sf"]]
