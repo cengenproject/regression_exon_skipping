@@ -41,6 +41,20 @@ sf_expression <- read_tsv("data/export_for_arman/tx_expression.tsv.gz") |>
 
 
 
+# TPM heatmap
+mat_sf_expression <- sf_expression |>
+  pivot_wider(id_cols = transcript_id,
+              names_from = sample_id,
+              values_from = TPM) |>
+  column_to_rownames("transcript_id") |>
+  as.matrix()
+
+pheatmap::pheatmap(log1p(mat_sf_expression),scale = "column",
+                   annotation_col = sf_expression |> select(sample_id, neuron_id) |> distinct() |> column_to_rownames("sample_id"))
+
+
+
+
 # Parameters of real data ----
 
 counts_measured <- quantifs |>
@@ -114,6 +128,9 @@ qs::qsave(real_data_fit,
 
 
 
+
+
+
 # simulate single ----
 
 # prepare simulation data
@@ -134,9 +151,7 @@ nb_samples <- quantifs |>
 nb_datapoints <- quantifs |> nrow()
 
 sim_sf <- sf_expression |>
-  select(transcript_id, sample_id) |>
-  mutate(TPM = sample(sf_expression$TPM),
-         neuron_id = str_match(sample_id, "^([A-Z0-9]{2,4})r[0-9]{2,4}$")[,2])
+  select(transcript_id, sample_id, neuron_id, TPM)
 
 true_coefs <- expand_grid(event_id = unique(quantifs$event_id),
                           contribution = c("inclusion", "exclusion"),
@@ -679,7 +694,8 @@ quantifs_filtered_nsamples_real |>
   ggplot() +
   theme_classic() +
   geom_point(aes(x = mean_PSI_btw_neurs, y = sd_PSI_btw_neurs)) +
-  geom_hline(aes(yintercept = 0.05), color = 'grey')
+  geom_hline(aes(yintercept = 0.05), color = 'grey') +
+  ggtitle("Real data")
 
 events_to_keep_variability_real <- quantifs_filtered_nsamples_real |>
   filter(!is.na(PSI)) |>
@@ -694,11 +710,8 @@ events_to_keep_variability_real <- quantifs_filtered_nsamples_real |>
   pull(event_id)
 
 
-events_to_keep_real <- intersect(events_to_keep_n_samples_real,
-                            events_to_keep_variability_real)
-
-quantifs_filtered_real <- quantifs_filtered_n_reads_real |>
-  filter(event_id %in% events_to_keep_real) |>
+quantifs_filtered_real <- quantifs_filtered_nsamples_real |>
+  filter(event_id %in% events_to_keep_variability_real) |>
   filter(! is.na(PSI))
 
 all.equal(sort(events_to_keep_real), sort(unique(quantifs_filtered_real$event_id)))
@@ -707,7 +720,7 @@ all.equal(sort(events_to_keep_real), sort(unique(quantifs_filtered_real$event_id
 quantifs_filtered_real |>
   ggplot() +
   theme_classic() +
-  geom_histogram(aes(x = nb_reads),color='grey', bins = 100) +
+  geom_histogram(aes(x = nb_reads), color='grey', bins = 100) +
   scale_x_log10()
 
 
@@ -727,7 +740,8 @@ quantifs_filtered_nsamples_sim |>
   ggplot() +
   theme_classic() +
   geom_point(aes(x = mean_PSI_btw_neurs, y = sd_PSI_btw_neurs)) +
-  geom_hline(aes(yintercept = 0.05), color = 'grey')
+  geom_hline(aes(yintercept = 0.05), color = 'grey') +
+  ggtitle("Simulated data")
 
 events_to_keep_variability_sim <- quantifs_filtered_nsamples_sim |>
   filter(!is.na(PSI)) |>
@@ -742,14 +756,11 @@ events_to_keep_variability_sim <- quantifs_filtered_nsamples_sim |>
   pull(event_id)
 
 
-
-
-events_to_keep_sim <- intersect(events_to_keep_n_samples_sim,
-                            events_to_keep_variability_sim)
-
-quantifs_filtered_sim <- quantifs_filtered_n_reads_sim |>
-  filter(event_id %in% events_to_keep_sim) |>
+quantifs_filtered_sim <- quantifs_filtered_nsamples_sim |>
+  filter(event_id %in% events_to_keep_variability_sim) |>
   filter(! is.na(PSI))
+
+
 
 all.equal(sort(events_to_keep_sim), sort(unique(quantifs_filtered_sim$event_id)))
 
@@ -798,16 +809,18 @@ tibble(type = c(rep("measured", nb_datapoints_real), rep("simul", nb_datapoints_
 
 
 
-# qs::qsave(quantifs_filtered_sim, "data/intermediates/230412_simulation/quantifs_filtered.qs")
-# qs::qsave(sim_sf, "data/intermediates/230412_simulation/sim_sf.qs")
-# qs::qsave(true_coefs, "data/intermediates/230412_simulation/true_coefs.qs")
+# qs::qsave(quantifs_filtered_sim, "data/intermediates/230412_simulation_v5/quantifs_filtered.qs")
+# qs::qsave(sim_sf, "data/intermediates/230412_simulation_v5/sim_sf.qs")
+# qs::qsave(true_coefs, "data/intermediates/230412_simulation_v5/true_coefs.qs")
 
 
 
 
 
 # Check simulated PSI
-(my_ev <- sample(events_to_keep_sim, 1))
+events_in_both <- intersect(events_to_keep_real, events_to_keep_sim)
+
+(my_ev <- sample(events_in_both, 1))
 bind_rows(
   quantifs_filtered_real |>
     filter(event_id == my_ev) |>
