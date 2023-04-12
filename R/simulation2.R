@@ -955,7 +955,7 @@ source("R/regression_functions.R")
 
 
 # Read data ----
-sim_replicated <- qs::qread("data/intermediates/230411_simulation/sim_sf.qs")
+sim_replicated <- qs::qread("data/intermediates/230411_simulation/rep_simulations.qs")
 
 sim_quantifs <- list_transpose(sim_replicated)[["sim_quantifs"]]
 sim_sf <- list_transpose(sim_replicated)[["sim_sf"]]
@@ -967,7 +967,7 @@ sim_true_coefs <- list_transpose(sim_replicated)[["true_coefs"]]
 # see https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02273-7#Sec9 for rationale
 
 logit <- function(x){
-  stopifnot(all(x >= 0 & x <= 1))
+  stopifnot(all((x >= 0 & x <= 1) | is.nan(x)))
   x[x == 0] <- .01
   x[x == 1] <- .99
   log(x/(1-x))
@@ -976,8 +976,8 @@ logit <- function(x){
 sim_quantifs <- map(sim_quantifs,
                     ~ .x |>
                       group_by(event_id) |>
-                      mutate(dPSI_nat = PSI - mean(PSI),
-                             dPSI_logit = logit(PSI) - logit(mean(PSI))))
+                      mutate(dPSI_nat = PSI - mean(PSI, na.rm = TRUE),
+                             dPSI_logit = logit(PSI) - logit(mean(PSI, na.rm = TRUE))))
 
 
 events_to_keep <- unique(sim_quantifs[[1]]$event_id)
@@ -1001,12 +1001,6 @@ sim_mat_sf <- map(sim_sf,
                   mat_sf_expression[,! apply(mat_sf_expression, 2, \(col) any(is.na(col)))]})
 
 
-
-
-
-
-
-###
 
 # Play with examples ----
 # SE_136, SE_303 are good. 1060 particularly
@@ -1045,7 +1039,7 @@ quantifs_filtered <- sim_quantifs[[my_rep]]
 mat_sf_expression <- sim_mat_sf[[my_rep]]
 y <- quantifs_filtered[quantifs_filtered$event_id == my_ev, c("sample_id", "PSI")] |>
   column_to_rownames("sample_id") |>
-  filter(!is.na("PSI")) |>
+  filter(!is.na(PSI)) |>
   as.matrix()
 
 # get x data
@@ -1061,6 +1055,8 @@ log(fit$lambda.min)
 log(fit$lambda.1se)
 
 
+plot(y[train,])
+
 
 # Sparse LASSO
 
@@ -1068,8 +1064,13 @@ log(fit$lambda.1se)
 quantifs_filtered <- sim_quantifs[[1]]
 mat_sf_expression <- sim_mat_sf[[1]]
 
-reg_lasso1 <- regression_wrapper(my_ev = my_ev, regression_method = "lasso", column = "dPSI_nat",
-                                 shuffle = FALSE, mat_sf_expression = mat_sf_expression, quants = quantifs_filtered)
+reg_lasso1 <- regression_wrapper(my_ev = my_ev,
+                                 regression_method = "lasso",
+                                 column = "dPSI_nat",
+                                 shuffle = FALSE,
+                                 mat_sf_expression = mat_sf_expression,
+                                 quants = quantifs_filtered,
+                                 intercept = FALSE)
 
 reg_lasso1$prediction_on_test |>
   ggplot(aes(x = measured, y = predicted)) +
@@ -1090,14 +1091,25 @@ reg_lasso1$coefs_sf |>
       hjust = 1,
       vjust = 0.5
     )) 
-true_coefs1 <- sim_true_coefs[[1]] |> filter(event_id == my_ev)
+true_coefs1 <- sim_true_coefs[[1]] |>
+  filter(event_id == my_ev) |>
+  mutate(true_coef = if_else(contribution == "inclusion",
+                             true_coef,
+                             - true_coef)) |>
+  group_by(event_id, transcript_id) |>
+  summarize(true_coef = sum(true_coef))
+
+true_coefs1[true_coefs1$true_coef != 0,]
+
 
 
 # sim 2
 quantifs_filtered <- sim_quantifs[[2]]
 mat_sf_expression <- sim_mat_sf[[2]]
 reg_lasso2 <- regression_wrapper(my_ev = my_ev, regression_method = "lasso", column = "dPSI_nat",
-                                 shuffle = FALSE, mat_sf_expression = mat_sf_expression, quants = quantifs_filtered)
+                                 shuffle = FALSE, mat_sf_expression = mat_sf_expression,
+                                 quants = quantifs_filtered,
+                                 intercept = FALSE)
 
 reg_lasso2$prediction_on_test |>
   ggplot(aes(x = measured, y = predicted)) +
@@ -1117,7 +1129,15 @@ reg_lasso2$coefs_sf |>
       hjust = 1,
       vjust = 0.5
     )) 
-true_coefs2 <- sim_true_coefs[[2]] |> filter(event_id == my_ev)
+true_coefs2 <- sim_true_coefs[[2]] |>
+  filter(event_id == my_ev) |>
+  mutate(true_coef = if_else(contribution == "inclusion",
+                             true_coef,
+                             - true_coef)) |>
+  group_by(event_id, transcript_id) |>
+  summarize(true_coef = sum(true_coef))
+
+true_coefs2[true_coefs2$true_coef != 0,]
 
 
 
@@ -1135,13 +1155,14 @@ comp_to_true <- list(sim1    = reg_lasso1$coefs_sf |>
             by = c("event_id", "transcript_id", "sim_rep"))
 
 
-# rsquares
 comp_to_true |>
   filter(transcript_id != "(Intercept)") |>
   ggplot() +
   theme_classic() +
+  geom_hline(aes(yintercept = 0), color = 'grey', alpha = 0.5) +
+  geom_vline(aes(xintercept = 0), color = 'grey', alpha = 0.5) +
   geom_point(aes(x = true_coef, y = s1)) +
-  # geom_abline(aes(slope = 1, intercept = 0)) +
+  geom_abline(aes(slope = 1, intercept = 0), color = 'grey90', linetype = 'dashed') +
   # coord_equal() +
   facet_wrap(~sim_rep) +
   ylab("Computed coef")
@@ -1176,7 +1197,8 @@ reg_lasso_coefs <- map(sample(100, 50),
                        ~ regression_wrapper(my_ev = my_ev, regression_method = "lasso", column = "PSI",
                                             shuffle = FALSE,
                                             mat_sf_expression = sim_mat_sf[[.x]],
-                                            quants = sim_quantifs[[.x]]) |>
+                                            quants = sim_quantifs[[.x]],
+                                            intercept = TRUE) |>
                          pluck("coefs_sf") |> 
                          add_column(sim_rep = paste0("sim_", .x)),
                        .progress = TRUE) |>
@@ -1232,7 +1254,13 @@ comp_to_true |>
             .groups = 'drop') |>
   mutate(TPR = TP/(TP+FN),
          FPR = FP/(FP+TN),
-         FDR = FP/(FP+TP))
+         FDR = FP/(FP+TP)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = 1-FDR, y = TPR)) +
+  scale_x_continuous(limits = c(0,1)) +
+  scale_y_continuous(limits = c(0,1)) +
+  geom_abline(aes(slope = 1, intercept = 0), color = 'grey', alpha = .5, linetype = 'dashed')
 
 
 #~  all replicates, all events ----
@@ -1240,12 +1268,14 @@ comp_to_true |>
 get_rsquared <- function(.method, .unit){
   map(sample(events_to_keep, 10),
       \(my_ev){
-        reg_lasso_coefs <- map(sample(100, 10),
-                               ~ regression_wrapper(my_ev = my_ev, regression_method = .method,
+        reg_lasso_coefs <- map(sample(100, 2),
+                               ~ possibly(regression_wrapper)(my_ev = my_ev, regression_method = .method,
                                                     column = .unit,
                                                     shuffle = FALSE,
                                                     mat_sf_expression = sim_mat_sf[[.x]],
-                                                    quants = sim_quantifs[[.x]]) |>
+                                                    quants = sim_quantifs[[.x]],
+                                                    intercept = if_else(.unit == "PSI",
+                                                                        TRUE, FALSE)) |>
                                  pluck("coefs_sf") |> 
                                  add_column(sim_rep = paste0("sim_", .x))) |>
           list_rbind()
@@ -1281,7 +1311,7 @@ all_rsquared <- tibble(regression_method = rep(c("lasso", "adaptive_lasso"), eac
                     .progress = TRUE))
 
 all_rsquared |>
-  mutate(res = map(res, unlist))  |>
+  mutate(res2 = map(res, ~ .x$result))  |>
   unnest(res) |>
   rename(rsquared = res) |>
   ggplot() +
@@ -1293,7 +1323,7 @@ all_rsquared |>
 # this was all using Rsquared as output, what if using the TPR and FDR
 
 
-get_TPR_FDR <- function(.method, .unit){
+get_TPR_FDR <- possibly(function(.method, .unit){
   map(sample(events_to_keep, 10),
       \(my_ev){
         reg_lasso_coefs <- map(sample(100, 10),
@@ -1301,7 +1331,9 @@ get_TPR_FDR <- function(.method, .unit){
                                                     column = .unit,
                                                     shuffle = FALSE,
                                                     mat_sf_expression = sim_mat_sf[[.x]],
-                                                    quants = sim_quantifs[[.x]]) |>
+                                                    quants = sim_quantifs[[.x]],
+                                                    intercept = if_else(.unit == "PSI",
+                                                                        TRUE, FALSE)) |>
                                  pluck("coefs_sf") |> 
                                  add_column(sim_rep = paste0("sim_", .x))) |>
           list_rbind()
@@ -1337,7 +1369,7 @@ get_TPR_FDR <- function(.method, .unit){
                  FPR = FP/(FP+TN),
                  FDR = FP/(FP+TP))
       })
-}
+}, otherwise = tibble())
 
 
 all_TPR_FDR <- tibble(regression_method = rep(c("lasso", "adaptive_lasso"), each = 3),
