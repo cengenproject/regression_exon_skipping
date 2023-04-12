@@ -143,7 +143,10 @@ true_coefs <- expand_grid(event_id = unique(quantifs$event_id),
                           transcript_id = unique(sim_sf$transcript_id)) |>
   group_by(event_id, contribution) |>
   nest() |>
-  mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(rep(0, nb_tx - 3), rnorm(3)))))) |>
+  mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(runif(n = 3,
+                                                                      min = -5, max = 5),
+                                                                rnorm(nb_tx - 3,
+                                                                      mean = 0, sd = 0.2)))))) |>
   unnest(data) |> ungroup()
 
 # get list of coefficients for each sample, event, transcript, contribution
@@ -795,9 +798,9 @@ tibble(type = c(rep("measured", nb_datapoints_real), rep("simul", nb_datapoints_
 
 
 
-# qs::qsave(quantifs_filtered_sim, "data/intermediates/230411_simulation/quantifs_filtered.qs")
-# qs::qsave(sim_sf, "data/intermediates/230411_simulation/sim_sf.qs")
-# qs::qsave(true_coefs, "data/intermediates/230411_simulation/true_coefs.qs")
+# qs::qsave(quantifs_filtered_sim, "data/intermediates/230412_simulation/quantifs_filtered.qs")
+# qs::qsave(sim_sf, "data/intermediates/230412_simulation/sim_sf.qs")
+# qs::qsave(true_coefs, "data/intermediates/230412_simulation/true_coefs.qs")
 
 
 
@@ -897,7 +900,10 @@ simulate_single <- function(real_data_fit, sf_expression, quantifs){
                             transcript_id = unique(sim_sf$transcript_id)) |>
     group_by(event_id, contribution) |>
     nest() |>
-    mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(rep(0, nb_tx - 3), rnorm(3)))))) |>
+    mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(runif(n = 3,
+                                                                        min = -5, max = 5),
+                                                                  rnorm(nb_tx - 3,
+                                                                        mean = 0, sd = 0.2)))))) |>
     unnest(data) |> ungroup()
   
   # get list of coefficients for each sample, event, transcript, contribution
@@ -938,7 +944,7 @@ sim_replicated <- replicate(100,
                             simplify = FALSE)
 
 
-# qs::qsave(sim_replicated, "data/intermediates/230411_simulation/rep_simulations.qs")
+# qs::qsave(sim_replicated, "data/intermediates/230412_simulation/rep_simulations.qs")
 
 
 
@@ -955,7 +961,7 @@ source("R/regression_functions.R")
 
 
 # Read data ----
-sim_replicated <- qs::qread("data/intermediates/230411_simulation/rep_simulations.qs")
+sim_replicated <- qs::qread("data/intermediates/230412_simulation/rep_simulations.qs")
 
 sim_quantifs <- list_transpose(sim_replicated)[["sim_quantifs"]]
 sim_sf <- list_transpose(sim_replicated)[["sim_sf"]]
