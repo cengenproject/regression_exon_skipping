@@ -13,7 +13,6 @@
 # 
 # Create 100 simulated datasets
 # 
-# Note: in model, use scaled-centered log-TPM
 
 
 
@@ -21,15 +20,15 @@
 
 library(tidyverse)
 
-# # read filtered objects with real data to generate simulations from
-# quantifs_filtered <- qs::qread("data/intermediates/simultation/230206_preprocessed_quantifs_filtered.qs")
-# sf_expression <- qs::qread("data/intermediates/simultation/230206_preprocessed_sf_expression.qs")
+# read real data to generate simulations from
 
-# unfiltered data
+events_to_keep <- read_lines("data/intermediates/230412_simulation_v6/events_to_keep.txt")
+neurons_to_keep <- read_lines("data/intermediates/230412_simulation_v6/neurons_to_keep.txt")
 
 quantifs <- read_tsv("data/export_for_arman/221110_PSI_quantifications.tsv") |>
   mutate(neuron_id = str_match(sample_id, "^([A-Z1-9]{2,4})r[0-9]{2,3}$")[,2]) |>
-  filter(! is.na(PSI))
+  filter(! is.na(PSI),
+         event_id %in% events_to_keep)
 
 putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
   filter(keep == 1 | keep == 2) |>
@@ -38,6 +37,11 @@ putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
 sf_expression <- read_tsv("data/export_for_arman/tx_expression.tsv.gz") |>
   filter(gene_id %in% putative_splice_factors) |>
   filter(sample_id %in% unique(quantifs$sample_id)) # remove RICr133, Ref, ...
+
+
+
+
+
 
 
 
@@ -106,8 +110,8 @@ plot(fit_mu_excl, breaks = 50)
 
 # Parameters
 #   mu    meanlog       sdlog
-# incl   2.650990   1.430999   
-# excl   2.499753   1.637029 
+# incl   3.528189    1.004428
+# excl   3.527456    1.031362 
 
 # get whole distribution of size
 distrib_size_incl <- all_fits_res |>
@@ -122,8 +126,8 @@ real_data_fit <- list(mu_incl = fit_mu_incl$estimate,
                       mu_excl = fit_mu_excl$estimate,
                       size_incl = distrib_size_incl,
                       size_excl = distrib_size_excl)
-qs::qsave(real_data_fit,
-          "data/intermediates/230411_real_data_fit_mu.qs")
+# qs::qsave(real_data_fit,
+#           "data/intermediates/230412_simulation_v6/real_data_fit_mu.qs")
 
 
 
@@ -134,7 +138,7 @@ qs::qsave(real_data_fit,
 # simulate single ----
 
 # prepare simulation data
-real_data_fit <- qs::qread("data/intermediates/230411_real_data_fit_mu.qs")
+real_data_fit <- qs::qread("data/intermediates/230412_simulation_v6/real_data_fit_mu.qs")
 
 nb_tx  <- sf_expression |>
   pull(transcript_id) |>
@@ -227,13 +231,8 @@ tibble(type = c(rep("measured", nb_datapoints), rep("simul", nb_datapoints)),
 
 # Filter ----
 
-sample2neuron <- function(sample_ids){
-  res <- str_extract(sample_ids, "^([A-Z0-9ef]{2,4})r\\d{1,3}$", group = 1L)
-  if(any(is.na(res))) warning(sum(is.na(res)), " NAs returned: ", head(sample_ids[is.na(res)]))
-  res
-}
 
-# Filter neurons ----
+#~ Filter neurons ----
 
 # Filter neurons with too few samples. Also remove Ref
 keep_neurons_real <- sf_expression |>
@@ -267,333 +266,7 @@ sim_quantifs <- sim_quantifs |>
 
 
 
-# Re-Make tx matrix
-
-mat_tx_expr_real <- sf_expression |>
-  pivot_wider(id_cols = transcript_id,
-              names_from = "sample_id",
-              values_from = "TPM") |>
-  column_to_rownames("transcript_id") |>
-  as.matrix()
-
-# remove empty rows
-mat_tx_expr_real <- mat_tx_expr_real[rowSums(mat_tx_expr_real) != 0,]
-dim(mat_tx_expr_real)
-
-
-mat_tx_expr_sim <- sim_sf |>
-  pivot_wider(id_cols = transcript_id,
-              names_from = "sample_id",
-              values_from = "TPM") |>
-  column_to_rownames("transcript_id") |>
-  as.matrix()
-
-# remove empty rows
-mat_tx_expr_sim <- mat_tx_expr_sim[rowSums(mat_tx_expr_sim) != 0,]
-dim(mat_tx_expr_sim)
-
-
-
-
-
-#~ Filter samples based on tx data ----
-
-# PCA
-pc_real <- prcomp(t(log1p(mat_tx_expr_real)), center = TRUE, scale. = TRUE)
-
-pcdf <- cbind(as.data.frame(pc_real$x), data.frame(sample_id = colnames(mat_tx_expr_real))) |>
-  mutate(neuron_id = sample2neuron(sample_id))
-
-plot(pcdf[,1:2])
-ggplot(pcdf, aes(x = PC1 , y = PC2, color = neuron_id)) +
-  theme_classic() +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = sample_id)) +
-  geom_abline(aes(intercept = -150, slope = -.3)) +
-  hues::scale_color_iwanthue()
-
-keep_samples_real <- unique(sf_expression$sample_id) |>
-  setdiff(c("RICr133","PVMr122","AVKr113"))
-
-
-pc_sim <- prcomp(t(log1p(mat_tx_expr_sim)), center = TRUE, scale. = TRUE)
-
-pcdf <- cbind(as.data.frame(pc_sim$x), data.frame(sample_id = colnames(mat_tx_expr_sim))) |>
-  mutate(neuron_id = sample2neuron(sample_id))
-
-plot(pcdf[,1:2])
-ggplot(pcdf, aes(x = PC1 , y = PC2, color = neuron_id)) +
-  theme_classic() +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = sample_id)) +
-  geom_abline(aes(intercept = -150, slope = -.3)) +
-  hues::scale_color_iwanthue()
-
-keep_samples_sim <- unique(sim_sf$sample_id) |>
-  setdiff(c("RICr133","PVMr122","AVKr113"))
-
-
-
-
-
-# Filter bad samples
-sf_expression <- sf_expression |>
-  filter(sample_id %in% keep_samples_real)
-
-quantifs <- quantifs |>
-  filter(sample_id %in% keep_samples_real)
-
-sim_sf <- sim_sf |>
-  filter(sample_id %in% keep_samples_sim)
-
-sim_quantifs <- sim_quantifs |>
-  filter(sample_id %in% keep_samples_sim)
-
-
-
-
-# Re-Make tx matrix
-mat_tx_expr_real <- sf_expression |>
-  pivot_wider(id_cols = transcript_id,
-              names_from = "sample_id",
-              values_from = "TPM") |>
-  column_to_rownames("transcript_id") |>
-  as.matrix()
-
-# remove empty rows
-mat_tx_expr_real <- mat_tx_expr_real[rowSums(mat_tx_expr_real) != 0,]
-dim(mat_tx_expr_real)
-
-
-mat_tx_expr_sim <- sim_sf |>
-  pivot_wider(id_cols = transcript_id,
-              names_from = "sample_id",
-              values_from = "TPM") |>
-  column_to_rownames("transcript_id") |>
-  as.matrix()
-
-# remove empty rows
-mat_tx_expr_sim <- mat_tx_expr_sim[rowSums(mat_tx_expr_sim) != 0,]
-dim(mat_tx_expr_sim)
-
-
-
-
-
-
-
-#~ Filter samples based on exon data ----
-
-# make matrix
-mat_quantifs_real <- quantifs |>
-  pivot_wider(id_cols = event_id,
-              names_from = "sample_id",
-              values_from = "PSI") |>
-  column_to_rownames("event_id") |>
-  as.matrix()
-dim(mat_quantifs_real)
-
-mat_quantifs_sim <- sim_quantifs |>
-  pivot_wider(id_cols = event_id,
-              names_from = "sample_id",
-              values_from = "PSI") |>
-  column_to_rownames("event_id") |>
-  as.matrix()
-dim(mat_quantifs_sim)
-
-
-
-# need to tackle NAs before PCA
-hist(rowSums(is.na(mat_quantifs_real)))
-hist(colSums(is.na(mat_quantifs_real)))
-
-mat_quantifs_real <- mat_quantifs_real[rowSums(is.na(mat_quantifs_real)) < 100,
-                             colSums(is.na(mat_quantifs_real)) < 500]
-dim(mat_quantifs_real)
-
-mat_quantifs_real <- missMDA::imputePCA(mat_quantifs_real)
-dim(mat_quantifs_real$completeObs)
-
-
-
-hist(rowSums(is.na(mat_quantifs_sim)))
-hist(colSums(is.na(mat_quantifs_sim)))
-
-mat_quantifs_sim <- mat_quantifs_sim[rowSums(is.na(mat_quantifs_sim)) < 100,
-                             colSums(is.na(mat_quantifs_sim)) < 500]
-dim(mat_quantifs_sim)
-
-mat_quantifs_sim <- missMDA::imputePCA(mat_quantifs_sim)
-dim(mat_quantifs_sim$completeObs)
-
-
-# PCA
-pc_real <- prcomp(t(mat_quantifs_real$completeObs), center = TRUE, scale. = TRUE)
-pcdf <- cbind(as.data.frame(pc_real$x), data.frame(sample_id = colnames(mat_quantifs_real$completeObs))) |>
-  mutate(neuron_id = sample2neuron(sample_id))
-
-plot(pcdf[,1:2])
-ggplot(pcdf, aes(x = PC1 , y = PC2, color = neuron_id)) +
-  theme_classic() +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = sample_id)) +
-  hues::scale_color_iwanthue()
-
-
-pc_sim <- prcomp(t(mat_quantifs_sim$completeObs), center = TRUE, scale. = TRUE)
-pcdf <- cbind(as.data.frame(pc_sim$x), data.frame(sample_id = colnames(mat_quantifs_sim$completeObs))) |>
-  mutate(neuron_id = sample2neuron(sample_id))
-
-plot(pcdf[,1:2])
-ggplot(pcdf, aes(x = PC1 , y = PC2, color = neuron_id)) +
-  theme_classic() +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = sample_id)) +
-  hues::scale_color_iwanthue()
-
-
-
-
-
-
-# Filter tx ----
-
-# PCA on tx
-pc_real <- prcomp(log1p(mat_tx_expr_real), center = TRUE, scale. = TRUE)
-
-pcdf <- cbind(as.data.frame(pc_real$x), data.frame(tx_id = rownames(mat_tx_expr_real)))
-plot(pcdf[,1:2])
-abline(v = 80)
-pcdf[pcdf$PC1 > 60,"tx_id"] |> writeClipboard()
-#> ribosomal, mitochondrial, ncRNAs, etc
-
-# table(wbData::wb_tx2g(pcdf[pcdf$PC1 > 60,"tx_id"], tx2g) %in% wormDatasets::worm_putative_splice_factors$gene_id)
-keep_tx_real <- rownames(mat_tx_expr_real) |>
-  setdiff(pcdf[pcdf$PC1 > 60,"tx_id"])
-
-
-
-
-
-pc_sim <- prcomp(log1p(mat_tx_expr_sim), center = TRUE, scale. = TRUE)
-
-pcdf <- cbind(as.data.frame(pc_sim$x), data.frame(tx_id = rownames(mat_tx_expr_sim)))
-plot(pcdf[,1:2])
-abline(v = 80)
-pcdf[pcdf$PC1 > 60,"tx_id"] |> writeClipboard()
-#> ribosomal, mitochondrial, ncRNAs, etc
-
-
-# table(wbData::wb_tx2g(pcdf[pcdf$PC1 > 60,"tx_id"], tx2g) %in% wormDatasets::worm_putative_splice_factors$gene_id)
-
-keep_tx_sim <- rownames(mat_tx_expr_sim) |>
-  setdiff(pcdf[pcdf$PC1 > 60,"tx_id"])
-
-
-
-# Filter bad tx
-sf_expression <- sf_expression |>
-  filter(transcript_id %in% keep_tx_real)
-sim_sf <- sim_sf |>
-  filter(transcript_id %in% keep_tx_sim)
-
-
-
-# Re-Make tx matrix
-mat_tx_expr_real <- sf_expression |>
-  pivot_wider(id_cols = transcript_id,
-              names_from = "sample_id",
-              values_from = "TPM") |>
-  column_to_rownames("transcript_id") |>
-  as.matrix()
-
-# remove empty rows
-mat_tx_expr_real <- mat_tx_expr_real[rowSums(mat_tx_expr_real) != 0,]
-dim(mat_tx_expr_real)
-
-
-mat_tx_expr_sim <- sim_sf |>
-  pivot_wider(id_cols = transcript_id,
-              names_from = "sample_id",
-              values_from = "TPM") |>
-  column_to_rownames("transcript_id") |>
-  as.matrix()
-
-# remove empty rows
-mat_tx_expr_sim <- mat_tx_expr_sim[rowSums(mat_tx_expr_sim) != 0,]
-dim(mat_tx_expr_sim)
-
-
-
-
-
-
-#~ Filter exons ----
-
-# make matrix
-mat_quantifs_real <- quantifs |>
-  pivot_wider(id_cols = event_id,
-              names_from = "sample_id",
-              values_from = "PSI") |>
-  column_to_rownames("event_id") |>
-  as.matrix()
-dim(mat_quantifs_real)
-
-
-mat_quantifs_sim <- sim_quantifs |>
-  pivot_wider(id_cols = event_id,
-              names_from = "sample_id",
-              values_from = "PSI") |>
-  column_to_rownames("event_id") |>
-  as.matrix()
-dim(mat_quantifs_sim)
-
-
-
-# need to tackle NAs before PCA
-hist(rowSums(is.na(mat_quantifs_real)))
-hist(colSums(is.na(mat_quantifs_real)))
-
-mat_quantifs_real <- mat_quantifs_real[rowSums(is.na(mat_quantifs_real)) < 100,
-                             colSums(is.na(mat_quantifs_real)) < 500]
-dim(mat_quantifs_real)
-
-mat_quantifs_real <- missMDA::imputePCA(mat_quantifs_real)
-dim(mat_quantifs_real$completeObs)
-
-
-
-
-hist(rowSums(is.na(mat_quantifs_sim)))
-hist(colSums(is.na(mat_quantifs_sim)))
-
-mat_quantifs_sim <- mat_quantifs_sim[rowSums(is.na(mat_quantifs_sim)) < 100,
-                             colSums(is.na(mat_quantifs_sim)) < 500]
-dim(mat_quantifs_sim)
-
-mat_quantifs_sim <- missMDA::imputePCA(mat_quantifs_sim)
-dim(mat_quantifs_sim$completeObs)
-
-
-
-# PCA
-pc_real <- prcomp(mat_quantifs_real$completeObs, center = TRUE, scale. = TRUE)
-
-pcdf <- cbind(as.data.frame(pc_real$x), data.frame(sample_id = rownames(mat_quantifs_real$completeObs)))
-plot(pcdf[,1:2])
-
-
-
-pc_sim <- prcomp(mat_quantifs_sim$completeObs, center = TRUE, scale. = TRUE)
-
-pcdf <- cbind(as.data.frame(pc_sim$x), data.frame(sample_id = rownames(mat_quantifs_sim$completeObs)))
-plot(pcdf[,1:2])
-
-
-
-
-
-# Filter events ----
+#~ Filter events ----
 
 # Keep only if enough reads supporting measure
 quantifs |>
@@ -714,9 +387,6 @@ quantifs_filtered_real <- quantifs_filtered_nsamples_real |>
   filter(event_id %in% events_to_keep_variability_real) |>
   filter(! is.na(PSI))
 
-all.equal(sort(events_to_keep_real), sort(unique(quantifs_filtered_real$event_id)))
-
-
 quantifs_filtered_real |>
   ggplot() +
   theme_classic() +
@@ -760,9 +430,6 @@ quantifs_filtered_sim <- quantifs_filtered_nsamples_sim |>
   filter(event_id %in% events_to_keep_variability_sim) |>
   filter(! is.na(PSI))
 
-
-
-all.equal(sort(events_to_keep_sim), sort(unique(quantifs_filtered_sim$event_id)))
 
 
 quantifs_filtered_sim |>
@@ -809,16 +476,17 @@ tibble(type = c(rep("measured", nb_datapoints_real), rep("simul", nb_datapoints_
 
 
 
-# qs::qsave(quantifs_filtered_sim, "data/intermediates/230412_simulation_v5/quantifs_filtered.qs")
-# qs::qsave(sim_sf, "data/intermediates/230412_simulation_v5/sim_sf.qs")
-# qs::qsave(true_coefs, "data/intermediates/230412_simulation_v5/true_coefs.qs")
+# qs::qsave(quantifs_filtered_sim, "data/intermediates/230412_simulation_v6/quantifs_filtered.qs")
+# qs::qsave(sim_sf, "data/intermediates/230412_simulation_v6/sim_sf.qs")
+# qs::qsave(true_coefs, "data/intermediates/230412_simulation_v6/true_coefs.qs")
 
 
 
 
 
 # Check simulated PSI
-events_in_both <- intersect(events_to_keep_real, events_to_keep_sim)
+events_in_both <- intersect(quantifs_filtered_real$event_id |> unique(),
+                            quantifs_filtered_sim$event_id |> unique())
 
 (my_ev <- sample(events_in_both, 1))
 bind_rows(
@@ -873,10 +541,13 @@ bind_rows(
 
 library(tidyverse)
 
-# unfiltered data
+events_to_keep <- read_lines("data/intermediates/230412_simulation_v6/events_to_keep.txt")
+neurons_to_keep <- read_lines("data/intermediates/230412_simulation_v6/neurons_to_keep.txt")
+
 quantifs <- read_tsv("data/export_for_arman/221110_PSI_quantifications.tsv") |>
   mutate(neuron_id = str_match(sample_id, "^([A-Z1-9]{2,4})r[0-9]{2,3}$")[,2]) |>
-  filter(! is.na(PSI))
+  filter(! is.na(PSI),
+         event_id %in% events_to_keep)
 
 putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
   filter(keep == 1 | keep == 2) |>
@@ -886,7 +557,10 @@ sf_expression <- read_tsv("data/export_for_arman/tx_expression.tsv.gz") |>
   filter(gene_id %in% putative_splice_factors) |>
   filter(sample_id %in% unique(quantifs$sample_id)) # remove RICr133, Ref, ...
 
-real_data_fit <- qs::qread("data/intermediates/230411_real_data_fit_mu.qs")
+real_data_fit <- qs::qread("data/intermediates/230412_simulation_v6/real_data_fit_mu.qs")
+
+
+
 
 
 
@@ -952,13 +626,12 @@ simulate_single <- function(real_data_fit, sf_expression, quantifs){
 }
 
 # 20s per replicate, 30' for 100
-sim_replicated <- replicate(100,
-                            simulate_single(real_data_fit, sf_expression, quantifs),
-                            simplify = FALSE)
+sim_replicated <- map(1:100,
+                      ~simulate_single(real_data_fit, sf_expression, quantifs),
+                      .progress = TRUE)
 
 
-# qs::qsave(sim_replicated, "data/intermediates/230412_simulation/rep_simulations.qs")
-
+# qs::qsave(sim_replicated, "data/intermediates/230412_simulation_v6/rep_simulations.qs")
 
 
 
@@ -973,12 +646,83 @@ library(glmnet)
 source("R/regression_functions.R")
 
 
-# Read data ----
-sim_replicated <- qs::qread("data/intermediates/230412_simulation/rep_simulations.qs")
+filter_single <- function(sims){
+  
+  stopifnot(class(sims) == "list")
+  stopifnot(length(sims) == 3L)
+  stopifnot(all.equal(names(sims), c("sim_quantifs", "sim_sf", "true_coefs")))
+  
+  names(sims) <- c("quantifs", "sf", "coefs")
+  
+  ## Filter neurons
+  keep_neurons <- sims$sf |>
+    select(sample_id, neuron_id) |>
+    distinct() |>
+    dplyr::count(neuron_id) |>
+    filter(n > 2) |>
+    pull(neuron_id)
+  
+  sims$sf <- sims$sf |>
+    filter(neuron_id %in% keep_neurons)
+  
+  sims$quantifs <- sims$quantifs |>
+    filter(neuron_id %in% keep_neurons)
+  
+  
+  ## Filter events
+  
+  # Keep only if enough reads supporting measure
+  sims$quantifs <- sims$quantifs |>
+    filter(nb_reads > 20)
+  
+  # filter based on nb of samples that event was measured in
+  events_to_keep_n_samples <- sims$quantifs |>
+    filter(! is.na(PSI)) |>
+    group_by(event_id) |>
+    summarize(nb_samples = n(),
+              nb_neurons = n_distinct(neuron_id)) |>
+    filter(nb_samples > 100,
+           nb_neurons > 32) |>
+    pull(event_id)
+  
+  sims$quantifs <- sims$quantifs |>
+    filter(event_id %in% events_to_keep_n_samples)
+  
+  # Filter events to remove those that are not DS between neuron types
+  events_to_keep_variability <- sims$quantifs |>
+    filter(!is.na(PSI)) |>
+    group_by(neuron_id, event_id) |>
+    summarize(mean_PSI  = mean(PSI),
+              sd_PSI = sd(PSI),
+              .groups = 'drop') |>
+    group_by(event_id) |>
+    summarize(mean_PSI_btw_neurs  = mean(mean_PSI),
+              sd_PSI_btw_neurs = sd(mean_PSI),
+              .groups = 'drop') |>
+    filter(sd_PSI_btw_neurs > 0.05) |>
+    pull(event_id)
+  
+  sims$quantifs <- sims$quantifs |>
+    filter(event_id %in% events_to_keep_variability) |>
+    filter(! is.na(PSI))
+  
+  list(sim_quantifs = sims$quantifs, sim_sf = sims$sf, true_coefs = sims$coefs)
+}
 
-sim_quantifs <- list_transpose(sim_replicated)[["sim_quantifs"]]
-sim_sf <- list_transpose(sim_replicated)[["sim_sf"]]
-sim_true_coefs <- list_transpose(sim_replicated)[["true_coefs"]]
+
+
+# Read data ----
+sim_replicated <- qs::qread("data/intermediates/230412_simulation_v6/rep_simulations.qs")
+
+
+sim_filtered <- sim_replicated |>
+  map(filter_single,
+      .progress = TRUE)
+
+
+sim_quantifs <- list_transpose(sim_filtered)[["sim_quantifs"]]
+sim_sf <- list_transpose(sim_filtered)[["sim_sf"]]
+sim_true_coefs <- list_transpose(sim_filtered)[["true_coefs"]]
 
 
 
@@ -1017,7 +761,8 @@ sim_mat_sf <- map(sim_sf,
                     column_to_rownames("sample_id") |>
                     as.matrix() |>
                     scale()
-                  mat_sf_expression[,! apply(mat_sf_expression, 2, \(col) any(is.na(col)))]})
+                  mat_sf_expression[,! apply(mat_sf_expression, 2, \(col) any(is.na(col)))]},
+                  .progress = TRUE)
 
 
 
@@ -1074,7 +819,77 @@ log(fit$lambda.min)
 log(fit$lambda.1se)
 
 
-plot(y[train,])
+
+
+true_coefs <- sim_true_coefs[[my_rep]] |>
+  filter(event_id == my_ev) |>
+  mutate(true_coef = if_else(contribution == "inclusion",
+                             true_coef,
+                             - true_coef)) |>
+  group_by(event_id, transcript_id) |>
+  summarize(true_coef = sum(true_coef),
+            .groups = 'drop') |>
+  mutate(true_coef = if_else(abs(true_coef) > 1,
+                             true_coef, 0))
+
+
+
+true_coefs[true_coefs$true_coef != 0,]
+
+left_join(
+  sim_sf[[my_rep]] |>
+    filter(transcript_id == "D1046.1b.1") |>
+    select(sample_id, TPM),
+  sim_quantifs[[my_rep]] |>
+    ungroup() |>
+    filter(event_id == my_ev) |>
+    select(sample_id, PSI),
+  by = "sample_id"
+) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = TPM, y = PSI))
+
+left_join(
+  sim_sf[[my_rep]] |>
+    filter(transcript_id == "C07E3.1b.1") |>
+    select(sample_id, TPM),
+  sim_quantifs[[my_rep]] |>
+    ungroup() |>
+    filter(event_id == my_ev) |>
+    select(sample_id, PSI),
+  by = "sample_id"
+) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = TPM, y = PSI))
+
+
+left_join(
+  left_join(
+    sim_sf[[my_rep]] |>
+      filter(transcript_id == "D1046.1b.1") |>
+      select(sample_id, TPM_D = TPM),
+    sim_quantifs[[my_rep]] |>
+      ungroup() |>
+      filter(event_id == my_ev) |>
+      select(sample_id, PSI),
+    by = "sample_id"
+  ),
+  left_join(
+    sim_sf[[my_rep]] |>
+      filter(transcript_id == "C07E3.1b.1") |>
+      select(sample_id, TPM_C = TPM),
+    sim_quantifs[[my_rep]] |>
+      ungroup() |>
+      filter(event_id == my_ev) |>
+      select(sample_id, PSI),
+    by = "sample_id"
+  ),
+  by = c("sample_id", "PSI")
+) |>
+  plotly::plot_ly(x = ~TPM_D, y = ~TPM_C, z = ~PSI)
+
 
 
 # Sparse LASSO
@@ -1116,7 +931,10 @@ true_coefs1 <- sim_true_coefs[[1]] |>
                              true_coef,
                              - true_coef)) |>
   group_by(event_id, transcript_id) |>
-  summarize(true_coef = sum(true_coef))
+  summarize(true_coef = sum(true_coef),
+            .groups = 'drop') |>
+  mutate(true_coef = if_else(abs(true_coef) > 0.8,
+                             true_coef, 0))
 
 true_coefs1[true_coefs1$true_coef != 0,]
 
@@ -1154,7 +972,10 @@ true_coefs2 <- sim_true_coefs[[2]] |>
                              true_coef,
                              - true_coef)) |>
   group_by(event_id, transcript_id) |>
-  summarize(true_coef = sum(true_coef))
+  summarize(true_coef = sum(true_coef),
+            .groups = 'drop') |>
+  mutate(true_coef = if_else(abs(true_coef) > 0.8,
+                             true_coef, 0))
 
 true_coefs2[true_coefs2$true_coef != 0,]
 
@@ -1249,6 +1070,15 @@ comp_to_true |>
   # facet_wrap(~sim_rep) +
   ylab("Computed coef")
 
+
+comp_to_true |>
+  ggplot() +
+  theme_classic() +
+  geom_hex(aes(x = true_coef, y = s1)) +
+  # geom_abline(aes(slope = 1, intercept = 0)) +
+  # coord_equal() +
+  # facet_wrap(~sim_rep) +
+  ylab("Computed coef")
 
 
 
