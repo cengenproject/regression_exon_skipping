@@ -55,7 +55,7 @@ regression_wrapper <- function(my_ev, regression_method, column, shuffle, mat_sf
 }
 
 
-sparse_regression <- function(my_ev, regression_method, column, shuffle = FALSE, mat_sf_expression, quants){
+do_regression <- function(my_ev, regression_method, column, shuffle = FALSE, mat_sf_expression, quants, intercept){
   possibly(regression_wrapper,
-           otherwise = list(NA))(my_ev, regression_method, column, shuffle, mat_sf_expression, quants)
+           otherwise = list(NA))(my_ev, regression_method, column, shuffle, mat_sf_expression, quants, intercept)
 }
