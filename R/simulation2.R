@@ -140,6 +140,17 @@ real_data_fit <- list(mu_incl = fit_mu_incl$estimate,
 # prepare simulation data
 real_data_fit <- qs::qread("data/intermediates/230412_simulation_v6/real_data_fit_mu.qs")
 
+
+rcoefs <- function(n, nb_nonzero = 3L, range_unif = 5, noise = 0.02){
+  stopifnot(range_unif > 0)
+  unif_coefs <- runif(n, min = -range_unif, max = range_unif)
+  noise_coefs <- rnorm(n, mean = 0, sd = noise)
+  non_zeros <- rep(c(1, 0), times =  c(nb_nonzero, n - nb_nonzero)) |> sample()
+  
+  non_zeros * unif_coefs + noise_coefs
+}
+
+
 nb_tx  <- sf_expression |>
   pull(transcript_id) |>
   unique() |>
@@ -162,10 +173,7 @@ true_coefs <- expand_grid(event_id = unique(quantifs$event_id),
                           transcript_id = unique(sim_sf$transcript_id)) |>
   group_by(event_id, contribution) |>
   nest() |>
-  mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(runif(n = 3,
-                                                                      min = -5, max = 5),
-                                                                rnorm(nb_tx - 3,
-                                                                      mean = 0, sd = 0.2)))))) |>
+  mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx)))) |>
   unnest(data) |> ungroup()
 
 # get list of coefficients for each sample, event, transcript, contribution
@@ -476,9 +484,9 @@ tibble(type = c(rep("measured", nb_datapoints_real), rep("simul", nb_datapoints_
 
 
 
-# qs::qsave(quantifs_filtered_sim, "data/intermediates/230412_simulation_v6/quantifs_filtered.qs")
-# qs::qsave(sim_sf, "data/intermediates/230412_simulation_v6/sim_sf.qs")
-# qs::qsave(true_coefs, "data/intermediates/230412_simulation_v6/true_coefs.qs")
+# qs::qsave(quantifs_filtered_sim, "data/intermediates/230413_simulation_v7/quantifs_filtered.qs")
+# qs::qsave(sim_sf, "data/intermediates/230413_simulation_v7/sim_sf.qs")
+# qs::qsave(true_coefs, "data/intermediates/230413_simulation_v7/true_coefs.qs")
 
 
 
@@ -569,6 +577,17 @@ rescale_distr <- function(x, targets){
   targets[["sdlog"]] * x/sd(x) + targets[["meanlog"]]
 }
 
+rcoefs <- function(n, nb_nonzero = 3L, range_unif = 5, noise = 0.02){
+  stopifnot(range_unif > 0)
+  unif_coefs <- runif(n, min = -range_unif, max = range_unif)
+  noise_coefs <- rnorm(n, mean = 0, sd = noise)
+  non_zeros <- rep(c(1, 0), times =  c(nb_nonzero, n - nb_nonzero)) |> sample()
+  
+  non_zeros * unif_coefs + noise_coefs
+}
+
+
+
 simulate_single <- function(real_data_fit, sf_expression, quantifs){
   nb_tx  <- sf_expression |>
     pull(transcript_id) |>
@@ -587,10 +606,7 @@ simulate_single <- function(real_data_fit, sf_expression, quantifs){
                             transcript_id = unique(sim_sf$transcript_id)) |>
     group_by(event_id, contribution) |>
     nest() |>
-    mutate(data = map(data, ~ add_column(.x, true_coef = sample(c(runif(n = 3,
-                                                                        min = -5, max = 5),
-                                                                  rnorm(nb_tx - 3,
-                                                                        mean = 0, sd = 0.2)))))) |>
+    mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx)))) |>
     unnest(data) |> ungroup()
   
   # get list of coefficients for each sample, event, transcript, contribution
@@ -631,7 +647,7 @@ sim_replicated <- map(1:100,
                       .progress = TRUE)
 
 
-# qs::qsave(sim_replicated, "data/intermediates/230412_simulation_v6/rep_simulations.qs")
+# qs::qsave(sim_replicated, "data/intermediates/230413_simulation_v7/rep_simulations.qs")
 
 
 
@@ -712,7 +728,7 @@ filter_single <- function(sims){
 
 
 # Read data ----
-sim_replicated <- qs::qread("data/intermediates/230412_simulation_v6/rep_simulations.qs")
+sim_replicated <- qs::qread("data/intermediates/230413_simulation_v7/rep_simulations.qs")
 
 
 sim_filtered <- sim_replicated |>
@@ -838,7 +854,7 @@ true_coefs[true_coefs$true_coef != 0,]
 
 left_join(
   sim_sf[[my_rep]] |>
-    filter(transcript_id == "D1046.1b.1") |>
+    filter(transcript_id == "R06A4.9b.1") |>
     select(sample_id, TPM),
   sim_quantifs[[my_rep]] |>
     ungroup() |>
@@ -852,7 +868,7 @@ left_join(
 
 left_join(
   sim_sf[[my_rep]] |>
-    filter(transcript_id == "C07E3.1b.1") |>
+    filter(transcript_id == "T04H1.5.1") |>
     select(sample_id, TPM),
   sim_quantifs[[my_rep]] |>
     ungroup() |>
@@ -868,7 +884,7 @@ left_join(
 left_join(
   left_join(
     sim_sf[[my_rep]] |>
-      filter(transcript_id == "D1046.1b.1") |>
+      filter(transcript_id == "T04H1.5.1") |>
       select(sample_id, TPM_D = TPM),
     sim_quantifs[[my_rep]] |>
       ungroup() |>
@@ -878,7 +894,7 @@ left_join(
   ),
   left_join(
     sim_sf[[my_rep]] |>
-      filter(transcript_id == "C07E3.1b.1") |>
+      filter(transcript_id == "T04H1.5.1") |>
       select(sample_id, TPM_C = TPM),
     sim_quantifs[[my_rep]] |>
       ungroup() |>
@@ -932,9 +948,9 @@ true_coefs1 <- sim_true_coefs[[1]] |>
                              - true_coef)) |>
   group_by(event_id, transcript_id) |>
   summarize(true_coef = sum(true_coef),
-            .groups = 'drop') |>
-  mutate(true_coef = if_else(abs(true_coef) > 0.8,
-                             true_coef, 0))
+            .groups = 'drop')
+  # mutate(true_coef = if_else(abs(true_coef) > 0.8,
+  #                            true_coef, 0))
 
 true_coefs1[true_coefs1$true_coef != 0,]
 
@@ -973,9 +989,9 @@ true_coefs2 <- sim_true_coefs[[2]] |>
                              - true_coef)) |>
   group_by(event_id, transcript_id) |>
   summarize(true_coef = sum(true_coef),
-            .groups = 'drop') |>
-  mutate(true_coef = if_else(abs(true_coef) > 0.8,
-                             true_coef, 0))
+            .groups = 'drop')
+  # mutate(true_coef = if_else(abs(true_coef) > 0.8,
+  #                            true_coef, 0))
 
 true_coefs2[true_coefs2$true_coef != 0,]
 
@@ -1034,7 +1050,7 @@ comp_to_true |>
 #~  all replicates ----
 
 reg_lasso_coefs <- map(sample(100, 50),
-                       ~ regression_wrapper(my_ev = my_ev, regression_method = "lasso", column = "PSI",
+                       ~ do_regression(my_ev = my_ev, regression_method = "lasso", column = "PSI",
                                             shuffle = FALSE,
                                             mat_sf_expression = sim_mat_sf[[.x]],
                                             quants = sim_quantifs[[.x]],
@@ -1118,14 +1134,16 @@ get_rsquared <- function(.method, .unit){
   map(sample(events_to_keep, 10),
       \(my_ev){
         reg_lasso_coefs <- map(sample(100, 2),
-                               ~ possibly(regression_wrapper)(my_ev = my_ev, regression_method = .method,
+                               ~ do_regression(my_ev = my_ev, regression_method = .method,
                                                     column = .unit,
                                                     shuffle = FALSE,
                                                     mat_sf_expression = sim_mat_sf[[.x]],
                                                     quants = sim_quantifs[[.x]],
                                                     intercept = if_else(.unit == "PSI",
                                                                         TRUE, FALSE)) |>
-                                 pluck("coefs_sf") |> 
+                                 pluck("coefs_sf",
+                                       .default = tibble(transcript_id = NA_character_,
+                                                         s1 = NA_real_)) |> 
                                  add_column(sim_rep = paste0("sim_", .x))) |>
           list_rbind()
         
@@ -1160,7 +1178,6 @@ all_rsquared <- tibble(regression_method = rep(c("lasso", "adaptive_lasso"), eac
                     .progress = TRUE))
 
 all_rsquared |>
-  mutate(res2 = map(res, ~ .x$result))  |>
   unnest(res) |>
   rename(rsquared = res) |>
   ggplot() +
@@ -1176,7 +1193,7 @@ get_TPR_FDR <- possibly(function(.method, .unit){
   map(sample(events_to_keep, 10),
       \(my_ev){
         reg_lasso_coefs <- map(sample(100, 10),
-                               ~ regression_wrapper(my_ev = my_ev, regression_method = .method,
+                               ~ do_regression(my_ev = my_ev, regression_method = .method,
                                                     column = .unit,
                                                     shuffle = FALSE,
                                                     mat_sf_expression = sim_mat_sf[[.x]],
