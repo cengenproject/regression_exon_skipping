@@ -147,7 +147,7 @@ rcoefs <- function(n, nb_nonzero = 3L, range_unif = 5, noise = 0.02){
   noise_coefs <- rnorm(n, mean = 0, sd = noise)
   non_zeros <- rep(c(1, 0), times =  c(nb_nonzero, n - nb_nonzero)) |> sample()
   
-  non_zeros * unif_coefs + noise_coefs
+  non_zeros * unif_coefs
 }
 
 
@@ -583,7 +583,7 @@ rcoefs <- function(n, nb_nonzero = 3L, range_unif = 5, noise = 0.02){
   noise_coefs <- rnorm(n, mean = 0, sd = noise)
   non_zeros <- rep(c(1, 0), times =  c(nb_nonzero, n - nb_nonzero)) |> sample()
   
-  non_zeros * unif_coefs + noise_coefs
+  non_zeros * unif_coefs
 }
 
 
@@ -647,7 +647,7 @@ sim_replicated <- map(1:100,
                       .progress = TRUE)
 
 
-# qs::qsave(sim_replicated, "data/intermediates/230413_simulation_v7/rep_simulations.qs")
+# qs::qsave(sim_replicated, "data/intermediates/230414_simulation_v8/rep_simulations.qs")
 
 
 
@@ -817,9 +817,9 @@ sim_quantifs[[37]] |>
 (my_rep <- sample(100, 1))
 quantifs_filtered <- sim_quantifs[[my_rep]]
 mat_sf_expression <- sim_mat_sf[[my_rep]]
-y <- quantifs_filtered[quantifs_filtered$event_id == my_ev, c("sample_id", "PSI")] |>
+y <- quantifs_filtered[quantifs_filtered$event_id == my_ev, c("sample_id", "dPSI_nat")] |>
   column_to_rownames("sample_id") |>
-  filter(!is.na(PSI)) |>
+  filter(!is.na(dPSI_nat)) |>
   as.matrix()
 
 # get x data
@@ -828,14 +828,39 @@ x <- mat_sf_expression[rownames(y),]
 n <- nrow(x)
 train <- sample(n, round(.7*n))
 
-fit <- cv.glmnet(x = x[train,], y = y[train,], type.measure = "mse", nfolds = 20, alpha = 1)
+fit <- cv.glmnet(x = x[train,], y = y[train,], type.measure = "mse", nfolds = 20, alpha = 1, intercept = FALSE, standardize = TRUE)
 plot(fit)
 
-log(fit$lambda.min)
-log(fit$lambda.1se)
 
+# check on test set
+prediction_on_test <- predict(fit, newx = x[-train,], s = "lambda.min") |>
+  as.data.frame() |>
+  as_tibble(rownames = "sample_id") |>
+  rename(predicted = lambda.min) |>
+  add_column(measured = y[-train])
 
+prediction_on_test |>
+  ggplot(aes(x = measured, y = predicted)) +
+  theme_classic() +
+  geom_point() +
+  geom_smooth(method = "lm")
 
+coefs_sf <- coef(fit, s = "lambda.min") |>
+  as.matrix() |>
+  as_tibble(rownames = "transcript_id")
+
+coefs_sf |>
+  filter(s1 != 0) |>
+  ggplot() +
+  theme_classic() +
+  geom_hline(aes(yintercept = 0), color = 'grey') +
+  geom_point(aes(x = transcript_id, y = s1)) +
+  theme(
+    axis.text.x = element_text(
+      angle = 90,
+      hjust = 1,
+      vjust = 0.5
+    )) 
 
 true_coefs <- sim_true_coefs[[my_rep]] |>
   filter(event_id == my_ev) |>
@@ -844,17 +869,25 @@ true_coefs <- sim_true_coefs[[my_rep]] |>
                              - true_coef)) |>
   group_by(event_id, transcript_id) |>
   summarize(true_coef = sum(true_coef),
-            .groups = 'drop') |>
-  mutate(true_coef = if_else(abs(true_coef) > 1,
-                             true_coef, 0))
+            .groups = 'drop')
 
 
+full_join(coefs_sf |> filter(transcript_id != "(Intercept)") |> select(transcript_id, computed = s1),
+          true_coefs |> select(transcript_id, ground_truth = true_coef),
+          by = "transcript_id") |>
+  ggplot() + theme_classic() +
+  geom_vline(aes(xintercept = 0), color = 'grey') +
+  geom_hline(aes(yintercept = 0), color = 'grey') +
+  geom_point(aes(x = ground_truth, y = computed))
 
-true_coefs[true_coefs$true_coef != 0,]
+
+# check influence visually (i.e. check that simulation not too noisy)
+true_coefs |> arrange(desc(abs(true_coef)))
+
 
 left_join(
   sim_sf[[my_rep]] |>
-    filter(transcript_id == "R06A4.9b.1") |>
+    filter(transcript_id == "Y54G2A.75.1") |>
     select(sample_id, TPM),
   sim_quantifs[[my_rep]] |>
     ungroup() |>
@@ -864,11 +897,11 @@ left_join(
 ) |>
   ggplot() +
   theme_classic() +
-  geom_point(aes(x = TPM, y = PSI))
+  geom_point(aes(x = log(TPM), y = PSI))
 
 left_join(
   sim_sf[[my_rep]] |>
-    filter(transcript_id == "T04H1.5.1") |>
+    filter(transcript_id == "Y116A8C.42.1") |>
     select(sample_id, TPM),
   sim_quantifs[[my_rep]] |>
     ungroup() |>
@@ -878,7 +911,7 @@ left_join(
 ) |>
   ggplot() +
   theme_classic() +
-  geom_point(aes(x = TPM, y = PSI))
+  geom_point(aes(x = log(TPM), y = PSI))
 
 
 left_join(
