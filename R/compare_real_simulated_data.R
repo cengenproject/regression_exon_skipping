@@ -298,7 +298,84 @@ abline(h = .5, col = 'grey', lty = 'dashed')
 
 
 
+# Look at correlation ----
+# Question: is correlation higher for true causal SFs?
 
+#~ sim ----
+
+# check that all needed sample_id exist in mat_sf
+# for(my_ev in unique(quantifs_filtered_sim$event_id)){
+#   y <- quantifs_filtered_sim |>
+#     filter(event_id == my_ev) |>
+#     pull(sample_id)
+#   stopifnot(all(y %in% rownames(mat_sf_sim)))
+# }
+
+# for each event, for each SF, across samples
+correlations_sim <- map(unique(quantifs_filtered_sim$event_id),
+    \(.ev) {
+      y <- quantifs_filtered_sim |>
+        filter(event_id == .ev)
+      
+      cor(mat_sf_sim[y$sample_id, ],
+          y$PSI) |>
+        as.data.frame() |>
+        rownames_to_column("transcript_id") |>
+        add_column(event_id = .ev)
+      
+      }) |>
+  list_rbind() |>
+  as_tibble() |>
+  rename(R = V1) |>
+  left_join(true_coefs_sim,
+            by = c("event_id", "transcript_id")) |>
+  mutate(relevant = true_coef != 0)
+
+
+correlations_sim |>
+  ggplot() +
+  theme_classic() +
+  geom_density(aes(x = abs(R), fill = relevant, color = relevant),
+               alpha = .5, size = 1) +
+  # scale_fill_manual(values = c('#5182AF', '#C04045')) +
+  # scale_color_manual(values = c('#5182AF', '#C04045'))
+  theme(legend.position = c(0.8,.5))
+
+correlations_sim |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = abs(R), y = runif(nrow(correlations_sim), 0, 100), color = relevant)) +
+  scale_color_manual(values = c('#5182AF', '#C04045'))
+
+correlations_real <- map(unique(quantifs_filtered_real$event_id),
+                        \(.ev) {
+                          y <- quantifs_filtered_real |>
+                            filter(event_id == .ev)
+                          
+                          cor(mat_sf_real[y$sample_id, ],
+                              y$PSI) |>
+                            as.data.frame() |>
+                            rownames_to_column("transcript_id") |>
+                            add_column(event_id = .ev)
+                          
+                        }) |>
+  list_rbind() |>
+  as_tibble() |>
+  rename(R = V1)
+
+correlations_real |>
+  ggplot() +
+  theme_classic() +
+  geom_density(aes(x = abs(R)),
+               alpha = .5)
+correlations_sim |>
+  add_column(data = "simulated") |>
+  bind_rows(correlations_real |> add_column(data = "real")) |>
+  ggplot() +
+  theme_classic() +
+  geom_density(aes(x = abs(R), fill = interaction(data, relevant)),
+               alpha = .2) +
+  theme(legend.position = c(0.8,.5))
 
 
 
