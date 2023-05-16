@@ -21,12 +21,12 @@ logit <- function(x){
 
 
 
-## Simulated data v7 ----
+## Simulated data v10 ----
 
 
-quantifs_filtered_sim <- qs::qread("data/intermediates/230413_simulation_v7/quantifs_filtered.qs")
-sf_sim <- qs::qread("data/intermediates/230413_simulation_v7/sim_sf.qs")
-true_coefs_sim <- qs::qread("data/intermediates/230413_simulation_v7/true_coefs.qs")
+quantifs_filtered_sim <- qs::qread("data/intermediates/230512_simulation_v10/quantifs_filtered.qs")
+sf_sim <- qs::qread("data/intermediates/230512_simulation_v10/sim_sf.qs")
+true_coefs_sim <- qs::qread("data/intermediates/230512_simulation_v10/true_coefs.qs")
 
 
 
@@ -170,10 +170,10 @@ first_pass_sim <- expand_grid(event_id = unique(quantifs_filtered_sim$event_id),
          coefs_sf = map(res, ~pluck(.x, "coefs_sf", .default = tibble()))) |>
   select(-res)
 
-# qs::qsave(first_pass_real, "data/intermediates/230413_simulation_v7/first_pass_real.qs")
-# qs::qsave(first_pass_sim, "data/intermediates/230413_simulation_v7/first_pass_sim")
+# qs::qsave(first_pass_real, "data/intermediates/230512_simulation_v10/first_pass_real.qs")
+# qs::qsave(first_pass_sim, "data/intermediates/230512_simulation_v10/first_pass_sim")
 
-
+#~ Check results ----
 first_pass_real <- qs::qread("data/intermediates/230413_simulation_v7/first_pass_real.qs")
 first_pass_sim <- qs::qread("data/intermediates/230413_simulation_v7/first_pass_sim")
 
@@ -220,18 +220,95 @@ bind_rows(first_pass_real |> add_column(data = "real"),
   theme_classic() +
   geom_boxplot(aes(x = data, y = nb_coefs, fill = intercept)) +
   facet_grid(rows = vars(method),
-             cols = vars(column))
+             cols = vars(column)) +
+  geom_hline(aes(yintercept = 10), color = 'grey', linetype = 'dashed')
+
+
+
+
+
+
+# Check fit on training set ----
+
+# Use adaptive lasso on deltaPSI no intercept
+
+#~ Real data ----
+
+(my_ev <- sample(unique(quantifs_filtered_real$event_id), 1))
+rsqu_real <- double(length(unique(quantifs_filtered_real$event_id))) |>
+  setNames(unique(quantifs_filtered_real$event_id))
+for(my_ev in unique(quantifs_filtered_real$event_id)){
+  # get y data
+  y <- quantifs_filtered_real[quantifs_filtered_real$event_id == my_ev, c("sample_id", "dPSI_nat")] |>
+    column_to_rownames("sample_id") |>
+    filter(!is.na(.data[["dPSI_nat"]])) |>
+    as.matrix()
+  
+  # get x data
+  x <- mat_sf_real[rownames(y),]
+  
+  n <- nrow(x)
+  train <- sample(n, round(.7*n))
+  
+  
+  
+  fit <- adaptive_lasso(x[train,], y[train], nfolds = 20, intercept = FALSE)
+  
+  # Look in train data
+  y_predicted <- predict(fit, newx = x[train,], s = "lambda.1se")
+  
+  # plot(y[train,], y_predicted, xlab = "PSI (measured)", ylab = "PCI (from fit)")
+  
+  rsqu_real[[my_ev]] <- summary(lm(y_predicted ~ y[train,]))$adj.r.squared
+}
+
+
+#~ Simulated data v10 ----
+(my_ev <- sample(unique(quantifs_filtered_sim$event_id), 1))
+rsqu_sim <- double(length(unique(quantifs_filtered_sim$event_id))) |>
+  setNames(unique(quantifs_filtered_sim$event_id))
+for(my_ev in unique(quantifs_filtered_sim$event_id)){
+  # get y data
+  y <- quantifs_filtered_sim[quantifs_filtered_sim$event_id == my_ev, c("sample_id", "dPSI_nat")] |>
+    column_to_rownames("sample_id") |>
+    filter(!is.na(.data[["dPSI_nat"]])) |>
+    as.matrix()
+    # get x data
+  x <- mat_sf_sim[rownames(y),]
+    n <- nrow(x)
+  train <- sample(n, round(.7*n))
+    fit <- adaptive_lasso(x[train,], y[train], nfolds = 20, intercept = FALSE)
+  
+  # Look in train data
+  y_predicted <- predict(fit, newx = x[train,], s = "lambda.1se")
+  
+  # plot(y[train,], y_predicted, xlab = "PSI (measured)", ylab = "PCI (from fit)")
+  
+  rsqu_sim[[my_ev]] <- summary(lm(y_predicted ~ y[train,]))$adj.r.squared
+}
+
+table(is.nan(rsqu_real))
+table(is.nan(rsqu_sim))
+
+boxplot(c(rsqu_real, rsqu_sim) ~ rep(c("real", "simulated"),
+                                     times = c(length(rsqu_real), length(rsqu_sim))),
+        xlab = NULL, ylab = "R² (on training data)")
+abline(h = .5, col = 'grey', lty = 'dashed')
+
+
+
+
 
 
 
 
 # Permutation tests ----
 
-# use LASSO on deltaPSI, no intercept
+# use adaptive LASSO on deltaPSI, no intercept
 
 # real data
 permutations_real <- expand_grid(event_id = unique(quantifs_filtered_real$event_id),
-                                 method = c("lasso"),
+                                 method = c("adaptive_lasso"),
                                  column = c("dPSI_nat"),
                                  shuffle = c(rep(FALSE, 1), rep(TRUE, 100))) |>
   mutate(res = pmap(list(event_id, method, column, shuffle),
@@ -247,7 +324,7 @@ permutations_real <- expand_grid(event_id = unique(quantifs_filtered_real$event_
          coefs_sf = map(res, ~pluck(.x, "coefs_sf", .default = tibble()))) |>
   select(-res)
 
-qs::qsave(permutations_real, "data/intermediates/230413_simulation_v7/permutations_real_singleUnshuffled_100.qs")
+# qs::qsave(permutations_real, "data/intermediates/230512_simulation_v10/permutations_real_singleUnshuffled_100.qs")
 
 
 
@@ -272,7 +349,7 @@ permutations_sim <- expand_grid(event_id = unique(quantifs_filtered_sim$event_id
          coefs_sf = map(res, ~pluck(.x, "coefs_sf", .default = tibble()))) |>
   select(-res)
 
-qs::qsave(permutations_sim, "data/intermediates/230413_simulation_v7/permutations_sim_singleUnshuffled_100.qs")
+# qs::qsave(permutations_sim, "data/intermediates/230512_simulation_v10/permutations_sim_singleUnshuffled_100.qs")
 
 
 # simulated data v1
@@ -293,7 +370,7 @@ permutations_sim1 <- expand_grid(event_id = unique(quantifs_filtered_sim1$event_
          coefs_sf = map(res, ~pluck(.x, "coefs_sf", .default = tibble()))) |>
   select(-res)
 
-qs::qsave(permutations_sim1, "data/intermediates/230413_simulation_v7/permutations_sim1_singleUnshuffled_100.qs")
+# qs::qsave(permutations_sim1, "data/intermediates/230512_simulation_v10/permutations_sim1_singleUnshuffled_100.qs")
 
 
 
