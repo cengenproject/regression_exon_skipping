@@ -21,12 +21,12 @@ logit <- function(x){
 
 
 
-## Simulated data v10 ----
+## Simulated data v11 ----
 
 
-quantifs_filtered_sim <- qs::qread("data/intermediates/230512_simulation_v10/quantifs_filtered.qs")
-sf_sim <- qs::qread("data/intermediates/230512_simulation_v10/sim_sf.qs")
-true_coefs_sim <- qs::qread("data/intermediates/230512_simulation_v10/true_coefs.qs")
+quantifs_filtered_sim <- qs::qread("data/intermediates/230517_simulation_v11/quantifs_filtered.qs")
+sf_sim <- qs::qread("data/intermediates/230517_simulation_v11/sim_sf.qs")
+true_coefs_sim <- qs::qread("data/intermediates/230517_simulation_v11/true_coefs.qs")
 
 
 
@@ -132,9 +132,9 @@ mat_sf_real[1:3,1:3]
 # make a first round of regressions
 
 first_pass_real <- expand_grid(event_id = unique(quantifs_filtered_real$event_id),
-                               method = c("lasso", "adaptive_lasso"),
-                               column = c("PSI", "dPSI_nat", "dPSI_logit"),
-                               intercept = c(TRUE, FALSE)) |>
+                               method = c("adaptive_lasso"),
+                               column = c("dPSI_nat"),
+                               intercept = c(FALSE)) |>
   # slice_sample(n = 2) |>
   mutate(res = pmap(list(event_id, method, column, intercept),
                     \(event_id, method, column, intercept) do_regression(event_id, method, column,
@@ -153,9 +153,9 @@ first_pass_real <- expand_grid(event_id = unique(quantifs_filtered_real$event_id
 
 
 first_pass_sim <- expand_grid(event_id = unique(quantifs_filtered_sim$event_id),
-                              method = c("lasso", "adaptive_lasso"),
-                              column = c("PSI", "dPSI_nat", "dPSI_logit"),
-                              intercept = c(TRUE, FALSE)) |>
+                              method = c("adaptive_lasso"),
+                              column = c("dPSI_nat"),
+                              intercept = c(FALSE)) |>
   # slice_sample(n = 2) |>
   mutate(res = pmap(list(event_id, method, column, intercept),
                     \(event_id, method, column, intercept) do_regression(event_id, method, column,
@@ -170,12 +170,12 @@ first_pass_sim <- expand_grid(event_id = unique(quantifs_filtered_sim$event_id),
          coefs_sf = map(res, ~pluck(.x, "coefs_sf", .default = tibble()))) |>
   select(-res)
 
-# qs::qsave(first_pass_real, "data/intermediates/230512_simulation_v10/first_pass_real.qs")
-# qs::qsave(first_pass_sim, "data/intermediates/230512_simulation_v10/first_pass_sim")
+qs::qsave(first_pass_real, "data/intermediates/230517_simulation_v11/first_pass_real.qs")
+qs::qsave(first_pass_sim, "data/intermediates/230517_simulation_v11/first_pass_sim")
 
 #~ Check results ----
-first_pass_real <- qs::qread("data/intermediates/230413_simulation_v7/first_pass_real.qs")
-first_pass_sim <- qs::qread("data/intermediates/230413_simulation_v7/first_pass_sim")
+# first_pass_real <- qs::qread("data/intermediates/230517_simulation_v11/first_pass_real.qs")
+# first_pass_sim <- qs::qread("data/intermediates/230517_simulation_v11/first_pass_sim")
 
 table(first_pass_real$rsquare |> is.na())
 table(first_pass_sim$rsquare |> is.na())
@@ -221,7 +221,7 @@ bind_rows(first_pass_real |> add_column(data = "real"),
   geom_boxplot(aes(x = data, y = nb_coefs, fill = intercept)) +
   facet_grid(rows = vars(method),
              cols = vars(column)) +
-  geom_hline(aes(yintercept = 10), color = 'grey', linetype = 'dashed')
+  geom_hline(aes(yintercept = 40), color = 'grey', linetype = 'dashed')
 
 
 
@@ -255,15 +255,15 @@ for(my_ev in unique(quantifs_filtered_real$event_id)){
   fit <- adaptive_lasso(x[train,], y[train], nfolds = 20, intercept = FALSE)
   
   # Look in train data
-  y_predicted <- predict(fit, newx = x[train,], s = "lambda.1se")
+  y_predicted <- predict(fit, newx = x[train,], s = "lambda.min")
   
-  # plot(y[train,], y_predicted, xlab = "PSI (measured)", ylab = "PCI (from fit)")
+  # plot(y[train,], y_predicted, xlab = "PSI (measured)", ylab = "PSI (from fit)")
   
   rsqu_real[[my_ev]] <- summary(lm(y_predicted ~ y[train,]))$adj.r.squared
 }
 
 
-#~ Simulated data v10 ----
+#~ Simulated data v11 ----
 (my_ev <- sample(unique(quantifs_filtered_sim$event_id), 1))
 rsqu_sim <- double(length(unique(quantifs_filtered_sim$event_id))) |>
   setNames(unique(quantifs_filtered_sim$event_id))
@@ -280,9 +280,9 @@ for(my_ev in unique(quantifs_filtered_sim$event_id)){
     fit <- adaptive_lasso(x[train,], y[train], nfolds = 20, intercept = FALSE)
   
   # Look in train data
-  y_predicted <- predict(fit, newx = x[train,], s = "lambda.1se")
+  y_predicted <- predict(fit, newx = x[train,], s = "lambda.min")
   
-  # plot(y[train,], y_predicted, xlab = "PSI (measured)", ylab = "PCI (from fit)")
+  plot(y[train,], y_predicted, xlab = "PSI (simulated)", ylab = "PSI (from fit)")
   
   rsqu_sim[[my_ev]] <- summary(lm(y_predicted ~ y[train,]))$adj.r.squared
 }

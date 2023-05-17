@@ -291,7 +291,7 @@ true_coefs <- expand_grid(event_id = unique(quantifs$event_id),
                           transcript_id = unique(sim_sf$transcript_id)) |>
   group_by(event_id) |>
   nest() |>
-  mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 10)))) |>
+  mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 40)))) |>
   unnest(data) |> ungroup()
 
 # get list of coefficients for each sample, event, transcript; generate mu0
@@ -607,9 +607,9 @@ tibble(type = c(rep("measured", nb_datapoints_real), rep("simul", nb_datapoints_
 
 
 
-# qs::qsave(quantifs_filtered_sim, "data/intermediates/230512_simulation_v10/quantifs_filtered.qs")
-# qs::qsave(sim_sf, "data/intermediates/230512_simulation_v10/sim_sf.qs")
-# qs::qsave(true_coefs, "data/intermediates/230512_simulation_v10/true_coefs.qs")
+# qs::qsave(quantifs_filtered_sim, "data/intermediates/230517_simulation_v11/quantifs_filtered.qs")
+# qs::qsave(sim_sf, "data/intermediates/230517_simulation_v11/sim_sf.qs")
+# qs::qsave(true_coefs, "data/intermediates/230517_simulation_v11/true_coefs.qs")
 
 
 
@@ -623,9 +623,9 @@ source("R/regression_functions.R")
 
 
 # Read data ----
-sim_quantifs <- qs::qread("data/intermediates/230512_simulation_v10/quantifs_filtered.qs")
-sim_sf <- qs::qread("data/intermediates/230512_simulation_v10/sim_sf.qs")
-sim_true_coefs <- qs::qread("data/intermediates/230512_simulation_v10/true_coefs.qs")
+sim_quantifs <- qs::qread("data/intermediates/230517_simulation_v11/quantifs_filtered.qs")
+sim_sf <- qs::qread("data/intermediates/230517_simulation_v11/sim_sf.qs")
+sim_true_coefs <- qs::qread("data/intermediates/230517_simulation_v11/true_coefs.qs")
 
 
 
@@ -769,7 +769,7 @@ true_coefs |> arrange(desc(abs(true_coef))) |> head(3)
 left_join(
   left_join(
     sim_sf |>
-      filter(transcript_id == "C50D2.8a.2") |>
+      filter(transcript_id == "STRG.2883.2") |>
       select(sample_id, TPM_D = TPM),
     sim_quantifs |>
       ungroup() |>
@@ -779,7 +779,7 @@ left_join(
   ),
   left_join(
     sim_sf |>
-      filter(transcript_id == "D1046.1a.6") |>
+      filter(transcript_id == "STRG.1415.4") |>
       select(sample_id, TPM_C = TPM),
     sim_quantifs |>
       ungroup() |>
@@ -922,7 +922,7 @@ simulate_single <- function(real_data_fit, sf_expression, quantifs){
                             transcript_id = unique(sim_sf$transcript_id)) |>
     group_by(event_id) |>
     nest() |>
-    mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 10)))) |>
+    mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 40)))) |>
     unnest(data) |> ungroup()
   
   # get list of coefficients for each sample, event, transcript; generate mu0
@@ -967,7 +967,7 @@ sim_replicated <- map(1:100,
                       .progress = TRUE)
 
 
-# qs::qsave(sim_replicated, "data/intermediates/230512_simulation_v10/rep_simulations.qs")
+qs::qsave(sim_replicated, "data/intermediates/230517_simulation_v11/rep_simulations.qs")
 
 
 
@@ -1047,7 +1047,7 @@ filter_single <- function(sims){
 
 
 
-# Read data ----
+#~ Read data ----
 sim_replicated <- qs::qread("data/intermediates/230512_simulation_v10/rep_simulations.qs")
 
 
