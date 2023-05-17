@@ -291,7 +291,7 @@ true_coefs <- expand_grid(event_id = unique(quantifs$event_id),
                           transcript_id = unique(sim_sf$transcript_id)) |>
   group_by(event_id) |>
   nest() |>
-  mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 40)))) |>
+  mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 40, range_unif = 5, noise = 0)))) |>
   unnest(data) |> ungroup()
 
 # get list of coefficients for each sample, event, transcript; generate mu0

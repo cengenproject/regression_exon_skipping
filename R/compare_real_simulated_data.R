@@ -282,8 +282,8 @@ for(my_ev in unique(quantifs_filtered_sim$event_id)){
   # Look in train data
   y_predicted <- predict(fit, newx = x[train,], s = "lambda.min")
   
-  plot(y[train,], y_predicted, xlab = "PSI (simulated)", ylab = "PSI (from fit)")
-  
+  # plot(y[train,], y_predicted, xlab = "PSI (simulated)", ylab = "PSI (from fit)")
+
   rsqu_sim[[my_ev]] <- summary(lm(y_predicted ~ y[train,]))$adj.r.squared
 }
 
