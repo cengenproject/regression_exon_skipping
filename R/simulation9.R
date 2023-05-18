@@ -291,7 +291,7 @@ true_coefs <- expand_grid(event_id = unique(quantifs$event_id),
                           transcript_id = unique(sim_sf$transcript_id)) |>
   group_by(event_id) |>
   nest() |>
-  mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 40, range_unif = 5, noise = 0)))) |>
+  mutate(data = map(data, ~ add_column(.x, true_coef = rcoefs(nb_tx, nb_nonzero = 40, range_unif = 50, noise = 0)))) |>
   unnest(data) |> ungroup()
 
 # get list of coefficients for each sample, event, transcript; generate mu0
@@ -607,9 +607,9 @@ tibble(type = c(rep("measured", nb_datapoints_real), rep("simul", nb_datapoints_
 
 
 
-# qs::qsave(quantifs_filtered_sim, "data/intermediates/230517_simulation_v11/quantifs_filtered.qs")
-# qs::qsave(sim_sf, "data/intermediates/230517_simulation_v11/sim_sf.qs")
-# qs::qsave(true_coefs, "data/intermediates/230517_simulation_v11/true_coefs.qs")
+qs::qsave(quantifs_filtered_sim, "data/intermediates/230517_simulation_v12/quantifs_filtered.qs")
+qs::qsave(sim_sf, "data/intermediates/230517_simulation_v12/sim_sf.qs")
+qs::qsave(true_coefs, "data/intermediates/230517_simulation_v12/true_coefs.qs")
 
 
 
@@ -623,9 +623,9 @@ source("R/regression_functions.R")
 
 
 # Read data ----
-sim_quantifs <- qs::qread("data/intermediates/230517_simulation_v11/quantifs_filtered.qs")
-sim_sf <- qs::qread("data/intermediates/230517_simulation_v11/sim_sf.qs")
-sim_true_coefs <- qs::qread("data/intermediates/230517_simulation_v11/true_coefs.qs")
+sim_quantifs <- qs::qread("data/intermediates/230517_simulation_v12/quantifs_filtered.qs")
+sim_sf <- qs::qread("data/intermediates/230517_simulation_v12/sim_sf.qs")
+sim_true_coefs <- qs::qread("data/intermediates/230517_simulation_v12/true_coefs.qs")
 
 
 

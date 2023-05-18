@@ -24,9 +24,9 @@ logit <- function(x){
 ## Simulated data v11 ----
 
 
-quantifs_filtered_sim <- qs::qread("data/intermediates/230517_simulation_v11/quantifs_filtered.qs")
-sf_sim <- qs::qread("data/intermediates/230517_simulation_v11/sim_sf.qs")
-true_coefs_sim <- qs::qread("data/intermediates/230517_simulation_v11/true_coefs.qs")
+quantifs_filtered_sim <- qs::qread("data/intermediates/230517_simulation_v12/quantifs_filtered.qs")
+sf_sim <- qs::qread("data/intermediates/230517_simulation_v12/sim_sf.qs")
+true_coefs_sim <- qs::qread("data/intermediates/230517_simulation_v12/true_coefs.qs")
 
 
 
@@ -363,18 +363,13 @@ correlations_real <- map(unique(quantifs_filtered_real$event_id),
   as_tibble() |>
   rename(R = V1)
 
-correlations_real |>
-  ggplot() +
-  theme_classic() +
-  geom_density(aes(x = abs(R)),
-               alpha = .5)
 correlations_sim |>
   add_column(data = "simulated") |>
   bind_rows(correlations_real |> add_column(data = "real")) |>
   ggplot() +
   theme_classic() +
   geom_density(aes(x = abs(R), fill = interaction(data, relevant)),
-               alpha = .2) +
+               alpha = .5) +
   theme(legend.position = c(0.8,.5))
 
 
