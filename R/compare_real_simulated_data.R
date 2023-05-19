@@ -234,7 +234,7 @@ bind_rows(first_pass_real |> add_column(data = "real"),
 
 #~ Real data ----
 
-(my_ev <- sample(unique(quantifs_filtered_real$event_id), 1))
+# (my_ev <- sample(unique(quantifs_filtered_real$event_id), 1))
 rsqu_real <- double(length(unique(quantifs_filtered_real$event_id))) |>
   setNames(unique(quantifs_filtered_real$event_id))
 for(my_ev in unique(quantifs_filtered_real$event_id)){
@@ -263,8 +263,8 @@ for(my_ev in unique(quantifs_filtered_real$event_id)){
 }
 
 
-#~ Simulated data v11 ----
-(my_ev <- sample(unique(quantifs_filtered_sim$event_id), 1))
+#~ Simulated data v12 ----
+# (my_ev <- sample(unique(quantifs_filtered_sim$event_id), 1))
 rsqu_sim <- double(length(unique(quantifs_filtered_sim$event_id))) |>
   setNames(unique(quantifs_filtered_sim$event_id))
 for(my_ev in unique(quantifs_filtered_sim$event_id)){
