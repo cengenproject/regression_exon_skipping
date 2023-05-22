@@ -60,8 +60,168 @@ mat_sf_expression <- sf_expression |>
   column_to_rownames("transcript_id") |>
   as.matrix()
 
-pheatmap::pheatmap(log1p(mat_sf_expression),scale = "column",
+pheatmap::pheatmap(log1p(mat_sf_expression),scale = "none",
                    annotation_col = sf_expression |> select(sample_id, neuron_id) |> distinct() |> column_to_rownames("sample_id"))
+
+
+# quantile normalization (project on mean quantile) Bolstad 2003
+normzd <- preprocessCore::normalize.quantiles(mat_sf_expression, keep.names = TRUE)
+
+pheatmap::pheatmap(normzd, scale = "none",
+                   annotation_col = sf_expression |> select(sample_id, neuron_id) |> distinct() |> column_to_rownames("sample_id"))
+
+
+i <- sample(rownames(mat_sf_expression), 1)
+plot(mat_sf_expression[i,], normzd[i,])
+
+
+# Percentile norm
+# thresholding
+expr_sc <- sf_expression |>
+  left_join(cengenDataSC::cengen_sc_1_bulk |>
+              as.data.frame() |>
+              rownames_to_column("gene_id") |>
+              pivot_longer(-gene_id, names_to = "neuron_id", values_to = "expr") |>
+              mutate(expr = case_match(expr > 0,
+                                       TRUE ~ "expressed in sc",
+                                       FALSE ~ "not expressed in sc")),
+            by = c("neuron_id", "gene_id"))
+
+expr_sc |>
+  filter(! is.na(expr)) |>
+  ggplot() +
+  theme_classic() +
+  geom_density(aes(x = TPM, fill = expr),
+               alpha = .5) +
+  scale_x_log10() +
+  geom_vline(aes(xintercept = c(5)), linetype = 'dashed', color = 'grey50') +
+  geom_vline(aes(xintercept = c(10)), linetype = 'dashed', color = 'grey50')
+#> we take 5 TPM as threshold
+
+list_sf_expressed <- sf_expression |>
+  filter(TPM > 5) |>
+  pull(transcript_id) |>
+  unique()
+
+length(list_sf_expressed)
+length(unique(sf_expression$transcript_id))
+#> 561 kept ot of 624
+
+# Now scale
+mat_sf_filtered <- mat_sf_expression[list_sf_expressed,]
+normzd_scale <- t(scale(t(mat_sf_filtered), center = FALSE, scale = TRUE))
+
+pheatmap::pheatmap(normzd_scale, scale = "none",
+                   annotation_col = sf_expression |> select(sample_id, neuron_id) |> distinct() |> column_to_rownames("sample_id"))
+
+
+opar <- par(mfrow = c(1, 2))
+i <- sample(rownames(mat_sf_expression), 1)
+plot(mat_sf_expression[i,], normzd_scale[i,])
+
+plot(sort(normzd_scale[i,], decreasing = TRUE))
+par(opar)
+
+
+# Max normalization
+mat_sf_filtered <- mat_sf_expression[list_sf_expressed,]
+normzd_max <- mat_sf_filtered / matrixStats::rowMaxs(mat_sf_filtered)
+
+pheatmap::pheatmap(normzd_max, scale = "none",
+                   annotation_col = sf_expression |> select(sample_id, neuron_id) |> distinct() |> column_to_rownames("sample_id"))
+
+
+opar <- par(mfrow = c(1, 2))
+i <- sample(rownames(mat_sf_filtered), 1)
+# plot(mat_sf_expression[i,], normzd_scale[i,])
+# plot(sort(normzd_scale[i,], decreasing = TRUE))
+plot(mat_sf_expression[i,], normzd_max[i,])
+
+plot(sort(normzd_max[i,], decreasing = TRUE))
+par(opar)
+
+
+
+
+# Now do percentile normalization
+perc_norm <- function(x, perc = 10){
+  stopifnot(100 %% perc == 0)
+  brks <- quantile(c(0,x), probs = seq(0, 100, by = perc)/100) |>
+    unique()
+  x_normalized <- cut(x,
+                    breaks = brks,
+                    labels = 2:length(brks),
+                    include.lowest = TRUE) |>
+    as.numeric()
+  #rescale
+  10 * x_normalized/max(x_normalized)
+}
+
+
+opar <- par(mfrow = c(1, 3))
+i <- sample(rownames(mat_sf_filtered), 1)
+plot(sort(mat_sf_filtered[i,], decreasing = TRUE))
+plot(sort(normzd_quants[i,], decreasing = TRUE))
+plot(mat_sf_filtered[i,], perc_norm(mat_sf_filtered[i,], perc = 10))
+par(opar)
+
+normzd_quants <- apply(mat_sf_filtered, 1, perc_norm) |> t()
+colnames(normzd_quants) <- colnames(mat_sf_filtered)
+
+
+
+pheatmap::pheatmap(normzd_quants, scale = "none",
+                   annotation_col = sf_expression |> select(sample_id, neuron_id) |> distinct() |> column_to_rownames("sample_id"))
+
+
+
+# Percentile with a convex function: square
+
+plot(mat_sf_filtered[i,], (mat_sf_filtered[i,]/max(mat_sf_filtered[i,]))^2)
+
+opar <- par(mfrow = c(1, 3))
+i <- sample(rownames(mat_sf_filtered), 1)
+plot(sort(mat_sf_filtered[i,], decreasing = TRUE))
+plot(sort((mat_sf_filtered[i,]/max(mat_sf_filtered[i,]))^2, decreasing = TRUE))
+plot(mat_sf_filtered[i,], (mat_sf_filtered[i,]/max(mat_sf_filtered[i,]))^2)
+par(opar)
+
+normzd_quants <- apply(mat_sf_filtered, 1, perc_norm) |> t()
+normzd_quants <- normzd_quants^2
+colnames(normzd_quants) <- colnames(mat_sf_filtered)
+
+
+
+pheatmap::pheatmap(normzd_quants, scale = "none",
+                   annotation_col = sf_expression |> select(sample_id, neuron_id) |> distinct() |> column_to_rownames("sample_id"))
+
+
+
+# One particular example, e.g. i <- "C18D11.4b.1"
+par(mfrow = c(1,1))
+plot(sort(mat_sf_filtered[i,], decreasing = TRUE),
+     xlab = "rank", ylab = "TPM (measured)")
+
+par(mfrow = c(1,2))
+plot(sort(perc_norm(mat_sf_filtered[i,], perc = 5), decreasing = TRUE),
+     xlab = "rank", ylab = "quantile (of TPM)")
+plot(mat_sf_filtered[i,], perc_norm(mat_sf_filtered[i,], perc = 5),
+     xlab = "TPM (measured)", ylab = "quantile (of TPM)")
+
+
+plot(sort((mat_sf_filtered[i,]^2)/max(mat_sf_filtered[i,]^2), decreasing = TRUE),
+     xlab = "rank", ylab = "TPM²/max(TPM²)")
+plot(mat_sf_filtered[i,], (mat_sf_filtered[i,]^2)/max(mat_sf_filtered[i,]^2),
+     xlab = "TPM (measured)", ylab = "TPM²/max(TPM²)")
+
+plot(sort((mat_sf_filtered[i,]/max(mat_sf_filtered[i,]))^2, decreasing = TRUE),
+     xlab = "rank", ylab = "(TPM/max(TPM))²")
+plot(mat_sf_filtered[i,], (mat_sf_filtered[i,]/max(mat_sf_filtered[i,]))^2,
+     xlab = "TPM (measured)", ylab = "(TPM/max(TPM))²")
+
+
+
+
 
 
 
@@ -303,19 +463,24 @@ randomized_samples <- quantifs |>
   full_join(sim_sf, by = "sample_id", relationship = "many-to-many") |>
   left_join(true_coefs, by = c("event_id", "transcript_id"), relationship = "many-to-many")
 
+normalize <- function(x){
+  ( x/max(x) )
+}
 
 # check distrib S as simulated
 sim_quantifs_raw <- randomized_samples |>
   group_by(event_id, sample_id, mu0) |>
-  summarize(Sraw = sum((true_coef*log1p(TPM))),
+  summarize(Sraw = sum((true_coef*normalize(TPM))),
             .groups = 'drop')
 
 hist(sim_quantifs_raw$Sraw, breaks = 50)
 hist(rescale_distr(sim_quantifs_raw$Sraw), breaks = 50)
 
 
-
-
+# rescale arbitrary distribution to uniform: https://stats.stackexchange.com/questions/36001/variable-frequency-redistribution/36246#36246
+rescale_distr2 <- function(x){
+  
+}
 # compute
 sim_quantifs <- sim_quantifs_raw |>
   mutate(S = rescale_distr(Sraw),
@@ -607,9 +772,9 @@ tibble(type = c(rep("measured", nb_datapoints_real), rep("simul", nb_datapoints_
 
 
 
-qs::qsave(quantifs_filtered_sim, "data/intermediates/230517_simulation_v12/quantifs_filtered.qs")
-qs::qsave(sim_sf, "data/intermediates/230517_simulation_v12/sim_sf.qs")
-qs::qsave(true_coefs, "data/intermediates/230517_simulation_v12/true_coefs.qs")
+# qs::qsave(quantifs_filtered_sim, "data/intermediates/230522_simulation_v13/quantifs_filtered.qs")
+# qs::qsave(sim_sf, "data/intermediates/230522_simulation_v13/sim_sf.qs")
+# qs::qsave(true_coefs, "data/intermediates/230522_simulation_v13/true_coefs.qs")
 
 
 
@@ -623,9 +788,9 @@ source("R/regression_functions.R")
 
 
 # Read data ----
-sim_quantifs <- qs::qread("data/intermediates/230517_simulation_v12/quantifs_filtered.qs")
-sim_sf <- qs::qread("data/intermediates/230517_simulation_v12/sim_sf.qs")
-sim_true_coefs <- qs::qread("data/intermediates/230517_simulation_v12/true_coefs.qs")
+sim_quantifs <- qs::qread("data/intermediates/230522_simulation_v13/quantifs_filtered.qs")
+sim_sf <- qs::qread("data/intermediates/230522_simulation_v13/sim_sf.qs")
+sim_true_coefs <- qs::qread("data/intermediates/230522_simulation_v13/true_coefs.qs")
 
 
 
@@ -652,17 +817,29 @@ events_to_keep <- unique(sim_quantifs$event_id)
 
 
 
-# Make SF expression as a matrix for use in regression
+# Prepare SF expression ----
+
+normalize <- function(x){
+  ( x/max(x) )^2
+}
+
+list_sf_expressed <- sim_sf |>
+  filter(TPM > 5) |>
+  pull(transcript_id) |>
+  unique()
+
 
 mat_sf_expression <-  sim_sf |>
+  filter(transcript_id %in% list_sf_expressed) |>
   select(transcript_id, sample_id, TPM) |>
-  mutate(TPM = log(TPM + 1)) |>
+  group_by(transcript_id) |>
+  mutate(TPM = normalize(TPM)) |>
+  ungroup() |>
   pivot_wider(id_cols = sample_id,
               names_from = "transcript_id",
               values_from = "TPM") |>
   column_to_rownames("sample_id") |>
-  as.matrix() |>
-  scale()
+  as.matrix()
 mat_sf_expression <- mat_sf_expression[,! apply(mat_sf_expression, 2, \(col) any(is.na(col)))]
 
 
@@ -769,7 +946,7 @@ true_coefs |> arrange(desc(abs(true_coef))) |> head(3)
 left_join(
   left_join(
     sim_sf |>
-      filter(transcript_id == "STRG.2883.2") |>
+      filter(transcript_id == "F53B7.3.1") |>
       select(sample_id, TPM_D = TPM),
     sim_quantifs |>
       ungroup() |>
@@ -779,7 +956,7 @@ left_join(
   ),
   left_join(
     sim_sf |>
-      filter(transcript_id == "STRG.1415.4") |>
+      filter(transcript_id == "ZK1067.6b.1") |>
       select(sample_id, TPM_C = TPM),
     sim_quantifs |>
       ungroup() |>
