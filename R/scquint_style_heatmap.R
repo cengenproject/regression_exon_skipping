@@ -109,9 +109,9 @@ y <- y[keep_samples, ]
 # Fit!
 
 mods <- map(y,
-    \(col){
-      glmnet(x = x[!is.na(col),], y = col[!is.na(col)], family = "binomial", intercept = FALSE)
-    })
+            \(col){
+              glmnet(x = x[!is.na(col),], y = col[!is.na(col)], family = "binomial", intercept = FALSE)
+            })
 
 all_coefs <- do.call(cbind, map(mods, coef, s = 0.05))
 colnames(all_coefs) <- names(mods)
@@ -181,124 +181,24 @@ h_psi <- HeatmapAnnotation(psi = t(psi[,names_psi]),
                                                                  colors = c("orange4", "white","purple4"))))
 
 
-h_full <- Heatmap(coefs[names_psi,names_x],heatmap_width = unit(0.3, "npc"), heatmap_height = unit(0.3, "npc"),
-        rect_gp = gpar(col = "grey90", lwd = .5),
-        column_names_side = "top",
-        row_names_side = "right",
-        na_col = "white",
-        cluster_rows = FALSE,
-        cluster_columns = FALSE,
-        col = circlize::colorRamp2(breaks = c(min(all_coefs), 0, max(all_coefs)),
-                                   colors = c("red", "grey","blue")),
-        # show_heatmap_legend = FALSE,
-        bottom_annotation = h_x,
-        left_annotation = h_psi)
+h_full <- Heatmap(coefs[names_psi,names_x],
+                  heatmap_width = unit(0.3, "npc"),
+                  heatmap_height = unit(0.3, "npc"),
+                  rect_gp = gpar(col = "grey90", lwd = .5),
+                  column_names_side = "top",
+                  row_names_side = "right",
+                  na_col = "white",
+                  cluster_rows = FALSE,
+                  cluster_columns = FALSE,
+                  col = circlize::colorRamp2(breaks = c(min(all_coefs), 0, max(all_coefs)),
+                                             colors = c("red", "grey","blue")),
+                  # show_heatmap_legend = FALSE,
+                  bottom_annotation = h_x,
+                  left_annotation = h_psi)
 
 pdf("data/intermediates/heatmaps/full1.pdf", width = 15, height = 15)
 draw(h_full)
 dev.off()
 
-
-# ready-to-assemble
-
-h_coefs <- Heatmap(coefs[names_psi,names_x],
-                   rect_gp = gpar(col = "grey90", lwd = .5),
-                   show_row_names = FALSE,
-                   show_column_names = FALSE,
-                   na_col = "white",
-                   cluster_rows = FALSE,
-                   cluster_columns = FALSE,
-                   col = circlize::colorRamp2(breaks = c(min(all_coefs), 0, max(all_coefs)),
-                                              colors = c("red", "grey","blue")),
-                   show_heatmap_legend = FALSE, left_annotation = HeatmapAnnotation(df = as.data.frame(t(psi[,names_psi]))))
-
-
-h_x <- Heatmap(x[,names_x],
-               show_row_names = FALSE,
-               show_column_names = FALSE,
-               na_col = "white",
-               cluster_rows = FALSE,
-               cluster_columns = FALSE,
-               col = circlize::colorRamp2(breaks = c(min(x), 0, max(x)),
-                                          colors = c("magenta", "white","green4")),
-               show_heatmap_legend = FALSE)
-
-
-
-h_psi <- Heatmap(t(psi[,names_psi]),
-                 show_row_names = FALSE,
-                 show_column_names = FALSE,
-                 na_col = "grey",
-                 cluster_rows = FALSE,
-                 cluster_columns = FALSE,
-                 col = circlize::colorRamp2(breaks = c(min(psi, na.rm = TRUE), 0, max(psi, na.rm = TRUE)),
-                                            colors = c("orange4", "white","purple4")),
-                 show_heatmap_legend = FALSE)
-
-
-fname <- "data/intermediates/heatmaps/heatmap1"
-pdf(paste0(fname, "_psi.pdf"), width = 5, height = 3)
-  draw(h_psi)
-dev.off()
-pdf(paste0(fname, "_x.pdf"), width = 3, height = 5)
-  draw(h_x)
-dev.off()
-pdf(paste0(fname, "_coefs.pdf"), width = 3, height = 3)
-  draw(h_coefs)
-dev.off()
-
-
-
-
-
-
-# With legend
-h_coefs <- Heatmap(coefs[names_psi,names_x],
-        show_row_names = FALSE,
-        show_column_names = FALSE,
-        na_col = "white",
-        cluster_rows = FALSE,
-        cluster_columns = FALSE,
-        col = circlize::colorRamp2(breaks = c(min(all_coefs), 0, max(all_coefs)),
-                                   colors = c("red", "grey","blue")),
-        heatmap_legend_param = list(title = "Regression coefficient"))
-
-
-h_x <- Heatmap(x[,names_x],
-        show_row_names = FALSE,
-        show_column_names = FALSE,
-        na_col = "white",
-        cluster_rows = FALSE,
-        cluster_columns = FALSE,
-        col = circlize::colorRamp2(breaks = c(min(x), 0, max(x)),
-                                   colors = c("magenta", "white","green4")),
-        heatmap_legend_param = list(title = "Expression Z-score"))
-
-
-
-h_psi <- Heatmap(t(psi[,names_psi]),
-        show_row_names = FALSE,
-        show_column_names = FALSE,
-        na_col = "grey",
-        cluster_rows = FALSE,
-        cluster_columns = FALSE,
-        col = circlize::colorRamp2(breaks = c(min(psi, na.rm = TRUE), 0, max(psi, na.rm = TRUE)),
-                                   colors = c("orange4", "white","purple4")),
-        heatmap_legend_param = list(title = "PSI"))
-
-
- 
-
-
-
-
-
-
-
-
-image(t(psi[,names_psi]))
-
-pheatmap(coefs[names_psi,names_x],
-         cluster_rows = FALSE, cluster_cols = FALSE)
 
 
