@@ -22,6 +22,7 @@ library(glmnet)
 library(wbData)
 
 gids <- wb_load_gene_ids(281)
+tx2g <- wb_load_tx2gene(281)
 
 quantifs_filtered <- qs::qread("data/intermediates/simultation/230206_preprocessed_quantifs_filtered.qs")
 sf_expression <- qs::qread("data/intermediates/simultation/230206_preprocessed_sf_expression.qs")
@@ -131,14 +132,56 @@ colnames(all_coefs) <- names(mods)
 all_interactions <- readr::read_tsv("../../biblio_SF/outputs/sf_targets_v3.tsv",
                                     show_col_types = FALSE)
 
+all_interactions_by_event <- all_interactions |>
+  select(SF, targets) |>
+  distinct() |>
+  left_join(events_coords,
+            by = join_by(targets == gene_id),
+            relationship = "many-to-many") |>
+  filter(!is.na(event_id)) |>
+  select(event_id, SF) |>
+  mutate(sf_tx = wb_g2tx(SF, tx2g)) |>
+  select(-SF) |>
+  unnest(sf_tx) |>
+  filter(sf_tx %in% colnames(x))
+
+
+reported_inter <- all_interactions_by_event |>
+  mutate(reported = 1) |>
+  bind_rows(tibble(event_id = setdiff(colnames(all_coefs), all_interactions_by_event$event_id),
+                   sf_tx = NA,
+                   reported = 0)) |>
+  bind_rows(
+    tibble(event_id = NA,
+           sf_tx = setdiff(colnames(x), all_interactions_by_event$sf_tx),
+           reported = 0)) |>
+  pivot_wider(id_cols = event_id,
+              names_from = "sf_tx",
+              values_from = "reported") |>
+  filter(!is.na(event_id)) |>
+  column_to_rownames("event_id") |>
+  as.matrix() |>
+  (\(mat) {mat[is.na(mat)] <- 0; mat})()
+
+table(reported_inter)
+dim(reported_inter)
+reported_inter[1:3,1:3]
+
+
+
+
+# Accuracy ----
+coefs <- t(as.matrix(all_coefs[rowSums(all_coefs) > 0, ]))
+TPR <- sum((coefs !=0) * reported_inter, na.rm = TRUE)/sum(reported_inter)
+
+
+
 
 
 library(ComplexHeatmap)
 
 # central matrix
-coefs <- as.matrix(all_coefs[rowSums(all_coefs) > 0, ])
 coefs[coefs == 0] <- NA
-coefs <- as.matrix(t(coefs))
 
 # left matrix
 psi <- quantifs_filtered |>
@@ -160,9 +203,13 @@ hc_psi <- hclust(dist(t(psi)))
 names_x <- hc_x$labels[hc_x$order] |> intersect(colnames(coefs))
 names_psi <- hc_psi$labels[hc_psi$order] |> intersect(rownames(coefs))
 
-
-
-
+stopifnot(all(names_psi %in% rownames(reported_inter)))
+stopifnot(all(names_x %in% colnames(reported_inter)))
+reported_inter <- reported_inter[names_psi, names_x]
+reported_inter_bool <- reported_inter == 1
+# dim(reported_inter_bool)
+# table(reported_inter_bool)
+# reported_inter_bool[1:3,1:3]
 
 h_x <- HeatmapAnnotation(x = t(x[,names_x]),
                          which = "column",
@@ -180,6 +227,10 @@ h_psi <- HeatmapAnnotation(psi = t(psi[,names_psi]),
                            col = list(psi = circlize::colorRamp2(breaks = c(min(psi, na.rm = TRUE), 0, max(psi, na.rm = TRUE)),
                                                                  colors = c("orange4", "white","purple4"))))
 
+cell_fun <- function(j, i, x, y, width, height, fill) {
+  grid.text(if_else(reported_inter_bool[i,j],"X",""), x, y, gp = gpar(fontsize = 8, family = "bold"))
+}
+
 
 h_full <- Heatmap(coefs[names_psi,names_x],
                   heatmap_width = unit(0.3, "npc"),
@@ -194,11 +245,79 @@ h_full <- Heatmap(coefs[names_psi,names_x],
                                              colors = c("red", "grey","blue")),
                   # show_heatmap_legend = FALSE,
                   bottom_annotation = h_x,
-                  left_annotation = h_psi)
+                  left_annotation = h_psi,
+                  cell_fun = cell_fun)
 
-pdf("data/intermediates/heatmaps/full1.pdf", width = 15, height = 15)
+draw(h_full)
+
+pdf("data/intermediates/heatmaps/s0-05.pdf", width = 14.4, height = 9.6)
 draw(h_full)
 dev.off()
+
+
+
+
+
+pdf("data/intermediates/heatmaps/full2.pdf", width = 15, height = 15)
+draw(h_full)
+dev.off()
+
+
+
+
+
+# Accuracy: range of sparsity ----
+
+get_tpr <- function(s){
+  all_coefs <- do.call(cbind, map(mods, coef, s = s))
+  colnames(all_coefs) <- names(mods)
+  
+  
+  reported_inter <- all_interactions_by_event |>
+    mutate(reported = 1) |>
+    bind_rows(tibble(event_id = setdiff(colnames(all_coefs), all_interactions_by_event$event_id),
+                     sf_tx = NA,
+                     reported = 0)) |>
+    bind_rows(
+      tibble(event_id = NA,
+             sf_tx = setdiff(colnames(x), all_interactions_by_event$sf_tx),
+             reported = 0)) |>
+    pivot_wider(id_cols = event_id,
+                names_from = "sf_tx",
+                values_from = "reported") |>
+    filter(!is.na(event_id)) |>
+    column_to_rownames("event_id") |>
+    as.matrix() |>
+    (\(mat) {mat[is.na(mat)] <- 0; mat})()
+  
+  
+  coefs <- t(as.matrix(all_coefs[rowSums(all_coefs) > 0, ]))
+  
+  reported_inter <- reported_inter[rownames(coefs), colnames(coefs)]
+  
+  if(sum(reported_inter) == 0) return(0)
+  
+  TPR <- sum((coefs !=0) * reported_inter, na.rm = TRUE)/sum(reported_inter)
+  # list(sum((coefs !=0) * reported_inter, na.rm = TRUE),sum(reported_inter))
+  TPR
+}
+
+get_tpr(0.05)
+
+tpr_range <- tibble(s = mods[[1]]$lambda,
+                    TPR = map_dbl(s, get_tpr))
+
+
+ggplot(tpr_range) +
+  theme_classic() +
+  geom_point(aes(x = s, y = TPR))
+
+
+
+
+
+
+
 
 
 
