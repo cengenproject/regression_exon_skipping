@@ -619,3 +619,203 @@ xx |>
   
 
 
+
+
+# Network ----
+library(DPM)
+
+#~ sim v11 ----
+y_sim <- quantifs_filtered_sim |>
+  select(event_id, sample_id, dPSI_nat) |>
+  pivot_wider(id_cols = event_id, names_from = sample_id, values_from = dPSI_nat) |>
+  column_to_rownames("event_id") |>
+  as.matrix()
+dim(y_sim)
+y_sim[1:3,1:3]
+
+# get x data
+dat_sim <- cbind(mat_sf_sim,t(y_sim))
+
+
+dim(dat_sim)
+dat_sim[1:3,1:3]
+
+table(is.na(dat_sim))
+dat_sim2 <- impute::impute.knn(dat_sim)$data
+dpm_sim <- DPM::reg.dpm(dat_sim2)
+
+# qs::qsave(dpm_sim, "data/intermediates/230607_simulation_v16/dpm_sim.qs")
+dim(dpm_sim)
+dpm_sim[1:4,1:4]
+diag(dpm_sim) <- 0
+image(dpm_sim)
+rownames(dpm_sim) <- colnames(dat_sim)
+colnames(dpm_sim) <- colnames(dat_sim)
+
+
+nb_sf <- ncol(mat_sf_sim)
+nb_psi <- nrow(y_sim)
+stopifnot(nrow(dpm_sim) == nb_sf + nb_psi)
+
+annot <- data.frame(row.names = rownames(dpm_sim),
+                    type = rep(c("SF", "PSI"),
+                               times = c(nb_sf, nb_psi)))
+
+crosscorr_sim <- dpm_sim[1:nb_sf, (nb_sf + 1):(nb_sf + nb_psi)]
+
+dim(crosscorr_sim)
+
+all.equal(t(crosscorr_sim),
+          dpm_sim[(nb_sf + 1):(nb_sf + nb_psi), 1:nb_sf])
+
+image(crosscorr_sim)
+
+
+
+pheatmap::pheatmap(crosscorr_sim,
+                   show_rownames = FALSE,
+                   show_colnames = FALSE)
+
+
+
+#~ real ----
+y_real <- quantifs_filtered_real |>
+  select(event_id, sample_id, dPSI_nat) |>
+  pivot_wider(id_cols = event_id, names_from = sample_id, values_from = dPSI_nat) |>
+  column_to_rownames("event_id") |>
+  as.matrix()
+dim(y_real)
+y_real[1:3,1:3]
+
+# get x data
+dat_real <- cbind(mat_sf_real,t(y_real))
+
+
+dim(dat_real)
+dat_real[1:3,1:3]
+
+table(is.na(dat_real))
+dat_real2 <- impute::impute.knn(dat_real)$data
+dpm_real <- DPM::reg.dpm(dat_real2)
+
+# qs::qsave(dpm_real, "data/intermediates/230607_simulation_v16/dpm_real.qs")
+dpm_real <- qs::qread("data/intermediates/230607_simulation_v16/dpm_real.qs")
+
+dim(dpm_real)
+dpm_real[1:4,1:4]
+diag(dpm_real) <- 0
+image(dpm_real)
+rownames(dpm_real) <- colnames(dat_real)
+colnames(dpm_real) <- colnames(dat_real)
+
+
+nb_sf <- ncol(mat_sf_real)
+nb_psi <- nrow(y_real)
+stopifnot(nrow(dpm_real) == nb_sf + nb_psi)
+
+crosscorr_real <- dpm_real[1:nb_sf, (nb_sf + 1):(nb_sf + nb_psi)]
+
+dim(crosscorr_real)
+
+all.equal(t(crosscorr_real),
+          dpm_real[(nb_sf + 1):(nb_sf + nb_psi), 1:nb_sf])
+
+image(crosscorr_real)
+
+
+pheatmap::pheatmap(crosscorr_real,
+                   show_rownames = FALSE,
+                   show_colnames = FALSE)
+
+
+
+
+dpm_links <- DPM::get_link(dpm_real)
+
+dpm_links |>
+  mutate(type1 = if_else(Node1 %in% colnames(mat_sf_real),
+                         "SF", "PSI"),
+         type2 = if_else(Node2 %in% colnames(mat_sf_real),
+                         "SF", "PSI"),
+         bipartite = type1 != type2) |>
+  pull(bipartite) |> table()
+
+xx <- dpm_links |>
+  as_tibble() |>
+  mutate(type1 = if_else(Node1 %in% colnames(mat_sf_real),
+                         "SF", "PSI"),
+         type2 = if_else(Node2 %in% colnames(mat_sf_real),
+                         "SF", "PSI"),
+         bipartite = type1 != type2) |>
+  filter(bipartite) |>
+  arrange(desc(score))
+
+hist(log10(xx$score), breaks = 50); abline(v = log10(2e-2), col = 'darkred')
+
+xx2 <- xx[xx$score > 2e-2,]
+qgraph::qgraph(xx2)
+
+regdpmdat <-tibble(score = abs( dpm_real[lower.tri(dpm_real)]), name='DPM_real')
+
+ggplot(regdpmdat, aes(x=score,color=name))+ theme_bw()  + geom_density(size=1.5)+
+  scale_color_manual(values=c("DPM"="SteelBlue3","DPM_real"="dodgerblue4"))
+
+regdpmtr <- kmeans_links(dpm_real)$threshold
+
+
+library(igraph)
+library(Matrix)
+
+sp_crosscorr <- Matrix(crosscorr_real, sparse = TRUE)
+sp_crosscorr[sp_crosscorr < 2e-2] <- 0
+
+names_sf <- colnames(mat_sf_real)
+names_psi <- rownames(y_real)
+
+adjm <- rbind(
+  cbind(Matrix(0, nrow = nb_sf, ncol = nb_sf, dimnames = list(names_sf, names_sf)),
+        sp_crosscorr),
+  cbind(Matrix(0, nrow = nb_psi, ncol = nb_sf, dimnames = list(names_psi, names_sf)),
+        Matrix(0, nrow = nb_psi, ncol = nb_psi, dimnames = list(names_psi, names_psi)))
+)
+
+image(adjm)
+image(adjm[1:nb_sf, (nb_sf+1):(nb_sf+nb_psi)])
+
+
+gr <- graph_from_adjacency_matrix(adjm,
+                                  mode = "directed",
+                                  weighted = TRUE) |>
+  set_vertex_attr("type",
+                  value = rep(c("sf", "psi"), times = c(nb_sf, nb_psi)))
+gr
+
+length(V(gr))
+nb_sf+nb_psi
+
+length(E(gr))
+sum(adjm > 0)
+
+head(E(gr))
+tail(E(gr))
+
+RCy3::cytoscapePing()
+RCy3::createNetworkFromIgraph(gr)
+
+
+
+
+plot(gr,
+     layout = layout_as_bipartite,
+     vertex.color = V(gr)$type,
+     label.cex = .001)
+
+
+
+
+
+
+
+
+
+
