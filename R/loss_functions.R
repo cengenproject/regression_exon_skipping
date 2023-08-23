@@ -44,3 +44,55 @@ loss_tong_cv_I <- function(Y, OM){
   norm(solve(D) %*% OM %*% t(Y),
              type = "F")^2
 }
+
+
+
+
+
+perdiag <- function(nrow){
+  K <- matrix(0L, nrow = nrow, ncol = nrow)
+  for(i in 1:nrow){
+    K[i,(nrow-i+1)] <- 1L
+  }
+  K
+}
+
+modif_chol <- function(M){
+  stopifnot((N <- nrow(M)) == ncol(M))
+  K <- perdiag(N)
+  
+  C <-  t(chol(K %*% M %*% K))
+  # stopifnot(all.equal(K %*% M %*% K,
+  #                     C %*% t(C)))
+  
+  S <- diag(diag(C))
+  
+  L <- C %*% solve(S)
+  
+  # Additional checks
+  # D0 <- S^2
+  # 
+  # stopifnot(all.equal(K %*% M %*% K,
+  #                     L %*% D0 %*% t(L)))
+  
+  
+  # get to the same form as paper
+  T <- t(K %*% L %*% K)
+  
+  T
+  
+  # Can be useful for checks, not used here:
+  # D <- matrix(0,nrow(D0),ncol(D0)); diag(D) <- 1/rev(diag(D0))
+  # 
+  # stopifnot(all.equal(M,
+  #                     t(T) %*% solve(D) %*% T,
+  #                     check.attributes = FALSE))
+  # list(T = T, D = D)
+}
+
+
+loss_tong_cv_II <- function(Y, OM){
+  mat_T <- modif_chol(OM)
+  
+  norm(mat_T %*% Y, type = "F")^2
+}
