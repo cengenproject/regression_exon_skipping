@@ -41,6 +41,6 @@ loss_quad <- function(Sts, OMtr){
 loss_tong_cv_I <- function(Y, OM){
   D <- diag(diag(OM))
   
-  norm(solve(D) %*% OM %*% Y,
+  norm(solve(D) %*% OM %*% t(Y),
              type = "F")^2
 }
