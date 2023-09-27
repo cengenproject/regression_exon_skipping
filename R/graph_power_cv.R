@@ -165,33 +165,286 @@ huge:::plot.huge(OM)
 #~ glasso ----
 
 
-cv_glasso <- map(c(2, 1, .5, .125, .1,.08, .075, .06, .05, .04),
-                 \(.rho){
-                   message(.rho)
-                   map(unique(folds),
-                       \(fold){
-                         S_train <- cov(mat_train[folds != fold,])
-                         S_valid <- cov(mat_train[folds == fold,])
-                         
-                         OM_train <- glasso::glasso(S_train, rho = .rho)
-                         
-                         tibble(rho = .rho,
-                                fold = fold,
-                                loss_frob = loss_frob(S_valid, OM_train$w),
-                                loss_quad = loss_quad(S_valid, OM_train$wi))
-                       },
-                       .progress = TRUE) |>
-                     list_rbind()
-                 }) |>
-  list_rbind()
+cv_glasso_res <- map(c(2, 1, .5, .125, .1,.08, .075, .06, .05, .04, .01, .005, .001) |> set_names(),
+                     \(.rho){
+                       message(.rho)
+                       map(unique(folds) |> set_names(),
+                           \(fold){
+                             S_train <- cov(mat_train[folds != fold,])
+                             S_valid <- cov(mat_train[folds == fold,])
+                             
+                             OM_train <- glasso::glasso(S_train, rho = .rho)
+                             
+                             list(S_train = S_train,
+                                  S_valid = S_valid,
+                                  res = OM_train)
+                           },
+                           .progress = TRUE)
+                     })
+
+# qs::qsave(cv_glasso_res, "data/intermediates/230818_cv/230824_cv_glasso_res.qs")
+cv_glasso_res <- qs::qread("data/intermediates/230818_cv/230824_cv_glasso_res.qs")
+
+cv_glasso <- cv_glasso_res |>
+  setNames(paste0(names(cv_glasso_res), "|")) |>
+  unlist(recursive = FALSE) |>
+  enframe() |>
+  separate_wider_delim(name,
+                       delim = "|.",
+                       names = c("rho", "fold")) |>
+  unnest_wider(value) |>
+  mutate(rho = as.numeric(rho),
+         fold = as.integer(fold))
 
 
-# cv_glasso |>
-#   rbind(cv_glasso2) |>
-#   qs::qsave("data/intermediates/230818_cv/230818_glasso.qs")
-# cv_glasso <- qs::qread("data/intermediates/230818_cv/230818_glasso.qs")
+cv_glasso <- cv_glasso |>
+  mutate(loss_frob = map2_dbl(S_valid, res,
+                              ~ loss_frob(.x, .y[["w"]])),
+         loss_quad = map2_dbl(S_valid, res,
+                              ~ loss_quad(.x, .y[["wi"]])),
+         loss_cv_I = map2_dbl(fold, res,
+                              ~loss_tong_cv_I(mat_train[folds != .x,], .y[["wi"]])),
+         loss_cv_II = map2_dbl(fold, res,
+                               ~loss_tong_cv_II(mat_train[folds != .x,], .y[["wi"]]))) |>
+  mutate(adj_sparsity = map_dbl(res,
+                                ~ mat_sparsity(.x[["wi"]])),
+         adj_power_law_R2 = map_dbl(res,
+                                    ~ mat_power_law(.x[["wi"]])))
+
+
+# qs::qsave(cv_glasso, "data/intermediates/230818_cv/230828_cv_glasso.qs")
+cv_glasso <- qs::qread("data/intermediates/230818_cv/230828_cv_glasso.qs")
+
+
 
 cv_glasso |>
+  select(where(is.atomic)) |>
+  pivot_longer(cols = starts_with("loss"),
+               names_prefix = "loss_",
+               names_to = "loss_function",
+               values_to = "loss") |>
+  group_by(rho, loss_function) |>
+  summarize(mean_loss = mean(loss),
+            sd_loss = sd(loss),
+            .groups = 'drop') |>
+  ggplot(aes(x = rho, y = mean_loss)) +
+  theme_classic() +
+  facet_grid(rows=vars(loss_function), scales = "free_y") +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_loss - sd_loss, ymax = mean_loss + sd_loss),
+                width = .05) +
+  scale_x_log10() 
+
+cv_glasso |>
+  select(where(is.atomic)) |>
+  pivot_longer(cols = starts_with("adj"),
+               names_prefix = "adj_",
+               names_to = "loss_function",
+               values_to = "metric") |>
+  group_by(rho, loss_function) |>
+  summarize(mean_metric = mean(metric),
+            sd_metric = sd(metric),
+            .groups = 'drop') |>
+  ggplot(aes(x = rho, y = mean_metric)) +
+  theme_classic() +
+  facet_grid(rows=vars(loss_function), scales = "free_y") +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_metric - sd_metric, ymax = mean_metric + sd_metric),
+                width = .05) +
+  geom_hline(aes(yintercept = 1), color = 'grey') +
+  scale_x_log10() 
+
+
+
+
+
+
+#~ QUIC ----
+
+run_quic <- function(S, r_gg, r_gs, r_ss){
+  regul_mat <- rbind(cbind(matrix(r_gg, nrow=nb_sf, ncol = nb_sf),
+                           matrix(r_gs, nrow=nb_sf, ncol = nb_psi)),
+                     cbind(matrix(r_gs, nrow=nb_psi, ncol = nb_sf),
+                           matrix(r_ss, nrow=nb_psi, ncol = nb_psi)))
+  
+  QUIC::QUIC(S, rho = regul_mat, msg = 0)
+}
+
+
+cv_quic_res <- tibble(r_gg = c(.01, .025, .05, .1, .5, 1, 2),
+                      r_gs = r_gg,
+                      r_ss = r_gg) |>
+  pmap(\(r_gg, r_gs, r_ss){
+    
+    message(r_gg,"; ", r_gs,"; ", r_ss)
+    map(unique(folds) |> set_names(),
+        \(fold){
+          
+          S_train <- cov(mat_train[folds != fold,])
+          S_valid <- cov(mat_train[folds == fold,])
+          
+          OM_train <- run_quic(S_train, r_gg, r_gs, r_ss)
+          
+          list(S_train = S_train,
+               S_valid = S_valid,
+               res = OM_train)
+        },
+        .progress = TRUE)
+  })
+
+# qs::qsave(cv_quic_res, "data/intermediates/230818_cv/230824_cv_quic_res.qs")
+cv_quic_res <- qs::qread("data/intermediates/230818_cv/230824_cv_quic_res.qs")
+
+cv_quic <- cv_quic_res |>
+  unlist(recursive = FALSE) |>
+  enframe() |>
+  bind_cols(expand_grid(rho = c(.01, .025, .05, .1, .5, 1, 2),
+                        fold = unique(folds))) |>
+  unnest_wider(value) |>
+  mutate(loss_frob = map2_dbl(S_valid, res,
+                              ~ loss_frob(.x, .y[["W"]])),
+         loss_quad = map2_dbl(S_valid, res,
+                              ~ loss_quad(.x, .y[["X"]])),
+         loss_cv_I = map2_dbl(fold, res,
+                              ~loss_tong_cv_I(mat_train[folds != .x,], .y[["X"]])),
+         loss_cv_II = map2_dbl(fold, res,
+                               ~loss_tong_cv_II(mat_train[folds != .x,], .y[["X"]]))) |>
+  mutate(adj_sparsity = map_dbl(res,
+                            ~ mat_sparsity(.x[["X"]])),
+         adj_power_law_R2 = map_dbl(res,
+                                ~ mat_power_law(.x[["X"]])))
+
+# qs::qsave(cv_quic, "data/intermediates/230818_cv/230828_cv_quic.qs")
+cv_quic <- qs::qread("data/intermediates/230818_cv/230828_cv_quic.qs")
+
+
+cv_quic |>
+  select(where(is.atomic)) |>
+  pivot_longer(cols = starts_with("loss"),
+               names_prefix = "loss_",
+               names_to = "loss_function",
+               values_to = "loss") |>
+  group_by(rho, loss_function) |>
+  summarize(mean_loss = mean(loss),
+            sd_loss = sd(loss),
+            .groups = 'drop') |>
+  ggplot(aes(x = rho, y = mean_loss)) +
+  theme_classic() +
+  facet_grid(rows=vars(loss_function), scales = "free_y") +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_loss - sd_loss, ymax = mean_loss + sd_loss),
+                width = .05) +
+  scale_x_log10() 
+
+cv_quic |>
+  select(where(is.atomic)) |>
+  pivot_longer(cols = starts_with("adj"),
+               names_prefix = "adj_",
+               names_to = "loss_function",
+               values_to = "metric") |>
+  group_by(rho, loss_function) |>
+  summarize(mean_metric = mean(metric),
+            sd_metric = sd(metric),
+            .groups = 'drop') |>
+  ggplot(aes(x = rho, y = mean_metric)) +
+  theme_classic() +
+  facet_grid(rows=vars(loss_function), scales = "free_y") +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_metric - sd_metric, ymax = mean_metric + sd_metric),
+                width = .05) +
+  geom_hline(aes(yintercept = 1), color = 'grey') +
+  scale_x_log10() 
+
+
+
+
+#~ Note: compare QUIC and glasso ----
+
+cv_glasso |>
+  filter(rho == 0.05) |>
+  select(where(is.atomic)) |>
+  summarize(across(-c(rho, fold),
+                   mean))
+  
+cv_quic |>
+  filter(rho == 0.05) |>
+  select(where(is.atomic)) |>
+  summarize(across(-c(rho, fold),
+                   mean))
+
+
+corpcor::is.positive.definite(cv_quic$res[[which(cv_quic$rho == 0.05 & cv_quic$fold == 1)]][["X"]])
+corpcor::is.positive.definite(cv_glasso$res[[which(cv_glasso$rho == 0.05 & cv_glasso$fold == 1)]][["wi"]])
+
+
+#~ scio ----
+
+cv_scio_res <- map(c(100, 50, 10, 5, 1, .5, .1, .05, .01) |> set_names(),
+               \(.lambda){
+                 message(.lambda)
+                 map(unique(folds) |> set_names(),
+                     \(fold){
+                       S_train <- cov(mat_train[folds != fold,])
+                       S_valid <- cov(mat_train[folds == fold,])
+                       
+                       OM_train <- scio::scio(S_train, lambda = .lambda)
+                       
+                       list(S_train = S_train,
+                            S_valid = S_valid,
+                            res = OM_train)
+                     },
+                     .progress = TRUE)
+               })
+
+
+# qs::qsave(cv_scio_res, "data/intermediates/230818_cv/23082_cv_scio_res.qs")
+cv_scio_res <- qs::qread("data/intermediates/230818_cv/23082_cv_scio_res.qs")
+
+
+xx <- map(cv_scio_res,
+    \(.pen) map_lgl(.pen,
+          \(.fold) isSymmetric(.fold[["res"]][["w"]])))
+
+
+cv_scio <- cv_scio_res |>
+  setNames(paste0(names(cv_scio_res), "|")) |>
+  unlist(recursive = FALSE) |>
+  enframe() |>
+  separate_wider_delim(name,
+                       delim = "|.",
+                       names = c("rho", "fold")) |>
+  unnest_wider(value) |>
+  mutate(rho = as.numeric(rho),
+         fold = as.integer(fold)) |>
+  mutate(res = map(res, ~corpcor::make.positive.definite(.x[["w"]])))
+
+cv_scio2 <- cv_scio |>
+  mutate(loss_frob = map2_dbl(S_valid, res,
+                              ~ loss_frob(.x, corpcor::pseudoinverse(.y))),
+         loss_quad = map2_dbl(S_valid, res,
+                              ~ loss_quad(.x, .y)),
+         loss_cv_I = map2_dbl(fold, res,
+                              ~loss_tong_cv_I(mat_train[folds != .x,], .y)),
+         loss_cv_II = map2_dbl(fold, res,
+                               ~loss_tong_cv_II(mat_train[folds != .x,], .y))) |>
+  mutate(adj_sparsity = map_dbl(res,
+                                ~ mat_sparsity(.x)),
+         adj_power_law_R2 = map_dbl(res,
+                                    ~ mat_power_law(.x)))
+
+
+# qs::qsave(cv_scio2, "data/intermediates/230818_cv/230829_cv_scio.qs")
+cv_scio2 <- qs::qread("data/intermediates/230818_cv/230829_cv_scio.qs")
+
+
+
+
+cv_scio2 |>
+  select(where(is.atomic)) |>
   pivot_longer(cols = starts_with("loss"),
                names_prefix = "loss_",
                names_to = "loss_function",
@@ -209,223 +462,531 @@ cv_glasso |>
                 width = .05) +
   scale_x_log10()
 
-
-
-#~ scio ----
-
-cv_scio <- map(c(2, 1, .5, .125, .1,.08, .075, .06, .05, .04, 3:10, 11:100, (2:10)*100),
-                 \(.lambda){
-                   message(.lambda)
-                   map(unique(folds),
-                       \(fold){
-                         S_train <- cov(mat_train[folds != fold,])
-                         S_valid <- cov(mat_train[folds == fold,])
-                         
-                         OM_train <- scio::scio(S_train, lambda = .lambda)
-                         
-                         tibble(lambda = .lambda,
-                                fold = fold,
-                                loss_frob = loss_frob(S_valid, corpcor::pseudoinverse(OM_train$w)),
-                                loss_quad = loss_quad(S_valid, OM_train$w))
-                       },
-                       .progress = TRUE) |>
-                     list_rbind()
-                 }) |>
-  list_rbind()
-
-
-# qs::qsave(cv_scio, "data/intermediates/230818_cv/230821_scio.qs")
-
-cv_scio <- qs::qread("data/intermediates/230818_cv/230821_scio.qs")
-
-cv_scio |>
-  pivot_longer(cols = starts_with("loss"),
-               names_prefix = "loss_",
+cv_scio2 |>
+  select(where(is.atomic)) |>
+  pivot_longer(cols = starts_with("adj"),
+               names_prefix = "adj_",
                names_to = "loss_function",
-               values_to = "loss") |>
-  group_by(lambda, loss_function) |>
-  summarize(mean_loss = mean(loss),
-            sd_loss = sd(loss),
+               values_to = "metric") |>
+  group_by(rho, loss_function) |>
+  summarize(mean_metric = mean(metric, na.rm = TRUE),
+            sd_metric = sd(metric, na.rm = TRUE),
             .groups = 'drop') |>
-  ggplot(aes(x = lambda, y = mean_loss)) +
-  theme_classic() +
-  facet_grid(rows=vars(loss_function), scales = "free_y") +
-  geom_errorbar(aes(ymin = mean_loss - sd_loss, ymax = mean_loss + sd_loss),
-                width = .05, color = 'grey90') +#scale_x_log10() +
-  geom_point() +
-  geom_line()
-
-
-#~ QUIC ----
-
-run_quic <- function(S, r_gg, r_gs, r_ss){
-  regul_mat <- rbind(cbind(matrix(r_gg, nrow=nb_sf, ncol = nb_sf),
-                           matrix(r_gs, nrow=nb_sf, ncol = nb_psi)),
-                     cbind(matrix(r_gs, nrow=nb_psi, ncol = nb_sf),
-                           matrix(r_ss, nrow=nb_psi, ncol = nb_psi)))
-  
-  QUIC::QUIC(S, rho = regul_mat, msg = 0)
-}
-
-
-
-expand_grid(r_gg = c(0.1, 1, 1.5, 2),
-            r_gs = c(0.01, 0.1, 0.5, 1, 1.5, 2),
-            r_ss = c(0.1, 1, 1.5, 2))
-
-cv_quic2 <- tibble(r_gg = c(.01, .05),
-                   r_gs = r_gg,
-                   r_ss = r_gg) |>
-  pmap(\(r_gg, r_gs, r_ss){
-    
-    message(r_gg,"; ", r_gs,"; ", r_ss)
-    map(unique(folds),
-        \(fold){
-          
-          S_train <- cov(mat_train[folds != fold,])
-          S_valid <- cov(mat_train[folds == fold,])
-          
-          OM_train <- run_quic(S_train, r_gg, r_gs, r_ss)
-          
-          tibble(r_gg = r_gg,
-                 r_gs = r_gs,
-                 r_ss = r_ss,
-                 fold = fold,
-                 loss_frob = loss_frob(S_valid, OM_train$W),
-                 loss_quad = loss_quad(S_valid, OM_train$X))
-        },
-        .progress = TRUE) |>
-      list_rbind()
-  }) |>
-  list_rbind()
-
-# qs::qsave(cv_quic3, "data/intermediates/230818_cv/230822_quic.qs")
-cv_quic <- qs::qread("data/intermediates/230818_cv/230822_quic.qs")
-
-
-cv_quic3 |>
-  pivot_longer(cols = starts_with("loss"),
-               names_prefix = "loss_",
-               names_to = "loss_function",
-               values_to = "loss") |>
-  group_by(r_gg,r_ss,r_gs, loss_function) |>
-  summarize(mean_loss = mean(loss),
-            sd_loss = sd(loss),
-            .groups = 'drop') |>
-  filter(r_gg == r_gs,
-         r_ss == r_gs) |>
-  ggplot(aes(x = r_gs, y = mean_loss)) +
+  ggplot(aes(x = rho, y = mean_metric)) +
   theme_classic() +
   facet_grid(rows=vars(loss_function), scales = "free_y") +
   geom_point() +
   geom_line() +
-  geom_errorbar(aes(ymin = mean_loss - sd_loss, ymax = mean_loss + sd_loss),
-                width = .05) #+scale_x_log10()
+  geom_errorbar(aes(ymin = mean_metric - sd_metric, ymax = mean_metric + sd_metric),
+                width = .05) +
+  geom_hline(aes(yintercept = 1), color = 'grey') +
+  scale_x_log10() 
+
+
+#~ SCIO provided CV by likelihood ----
+
+cv_sciocv_res <- map(unique(folds) |> set_names(),
+                   \(fold){
+                     S_train <- cov(mat_train[folds != fold,])
+                     S_valid <- cov(mat_train[folds == fold,])
+                     
+                     OM_train <- scio::scio.cv(S_train, alpha = .8)
+                     
+                     list(S_train = S_train,
+                          S_valid = S_valid,
+                          res = OM_train)
+                   },
+                   .progress = TRUE)
+
+# qs::qsave(cv_sciocv_res, "data/intermediates/230818_cv/230830_cv_sciocv_res.qs")
+
+xx <- map(cv_scio_res,
+          \(.pen) map_lgl(.pen,
+                          \(.fold) isSymmetric(.fold[["res"]][["w"]])))
+
+
+
 
 
 
 
 #~ DPM ----
-cv_dpm <- map(unique(folds),
-                  possibly(\(fold){
-                    
+
+cv_dpm_res <- map(unique(folds) |> set_names(),
+                  \(fold){
                     S_train <- cov(mat_train[folds != fold,])
                     S_valid <- cov(mat_train[folds == fold,])
                     
                     OM_train <- DPM::dpm(S_train)
                     
-                    tibble(loss_frob = loss_frob(S_valid, corpcor::pseudoinverse(OM_train)),
-                           loss_quad = loss_quad(S_valid, OM_train))
+                    list(S_train = S_train,
+                         S_valid = S_valid,
+                         res = OM_train)
                   },
-                  otherwise = tibble(loss_frob = Inf, loss_quad = Inf)),
-                  .progress = TRUE) |>
-  list_rbind()
-# qs::qsave(cv_dpm, "data/intermediates/230818_cv/230822_dpm.qs")
+                  .progress = TRUE)
+
+# qs::qsave(cv_dpm_res, "data/intermediates/230818_cv/230829_cv_dpm_res.qs")
+
+cv_dpm_res <- qs::qread("data/intermediates/230818_cv/230829_cv_dpm_res.qs")
+
+
+xx <- map_lgl(cv_dpm_res,
+              \(.fold) corpcor::make.positive.definite(.fold[["res"]]))
+
+make.symmetric <- function(mat){
+  (mat + t(mat))/2
+}
+
+
+cv_dpm <- cv_dpm_res |>
+  enframe(name = "fold") |>
+  unnest_wider(value) |>
+  mutate(fold = as.integer(fold),
+         res = map2(res, S_train,
+                    ~ {
+                      rownames(.x) <- rownames(.y)
+                      colnames(.x) <- colnames(.y)
+                      .x
+                    }),
+         res = map(res,
+                   ~ .x[rowSums(is.na(.x)) < 700, colSums(is.na(.x)) < 700]),
+         res = map(res, corpcor::make.positive.definite))
+
+cv_dpm2 <- cv_dpm |>
+  mutate(loss_frob = map2_dbl(S_valid, res,
+                              ~ loss_frob(.x[rownames(.y),colnames(.y)],
+                                          corpcor::pseudoinverse(.y))),
+         loss_quad = map2_dbl(S_valid, res,
+                              ~ loss_quad(.x[rownames(.y),colnames(.y)], .y)),
+         loss_cv_I = map2_dbl(fold, res,
+                              ~loss_tong_cv_I(mat_train[folds != .x, colnames(.y)], .y)),
+         loss_cv_II = map2_dbl(fold, res,
+                               ~loss_tong_cv_II(mat_train[folds != .x, colnames(.y)], .y))) |>
+  mutate(adj_sparsity = map_dbl(res,
+                                ~ mat_sparsity(.x)),
+         adj_power_law_R2 = map_dbl(res,
+                                    ~ mat_power_law(.x)))
+
+
+# qs::qsave(cv_dpm2, "data/intermediates/230818_cv/230829_cv_dpm2.qs")
+cv_dpm2 <- qs::qread("data/intermediates/230818_cv/230829_cv_dpm2.qs")
 
 
 
-# cv_dpm_reg <- map(unique(folds),
-#               possibly(\(fold){
-#                 
-#                 S_train <- cov(mat_train[folds != fold,])
-#                 S_valid <- cov(mat_train[folds == fold,])
-#                 
-#                 OM_train <- DPM::reg.dpm(S_train)
-#                 
-#                 tibble(loss_frob = loss_frob(S_valid, corpcor::pseudoinverse(OM_train)),
-#                        loss_quad = loss_quad(S_valid, OM_train))
-#               },
-#               otherwise = tibble(loss_frob = Inf, loss_quad = Inf)),
-#               .progress = TRUE) |>
-#   list_rbind()
-# 
-# qs::qsave(cv_dpm_reg, "data/intermediates/230818_cv/230822_dpm_reg.qs")
-# cv_dpm_reg <- qs::qread("data/intermediates/230818_cv/230822_dpm_reg.qs")
+
+cv_dpm2 |>
+  select(where(is.atomic))
 
 
-cv_dpm |>
-  pivot_longer(cols = starts_with("loss"),
-               names_prefix = "loss_",
-               names_to = "loss_function",
-               values_to = "loss") |>
-  group_by(r_gg,r_ss,r_gs, loss_function) |>
-  summarize(mean_loss = mean(loss),
-            sd_loss = sd(loss),
-            .groups = 'drop') |>
-  filter(r_gg == r_gs,
-         r_ss == r_gs) |>
-  ggplot(aes(x = r_gs, y = mean_loss)) +
+
+
+# Source of error ----
+
+cv_quic <- qs::qread("data/intermediates/230818_cv/230828_cv_quic.qs")
+
+
+#~ Tong CV I ----
+
+
+# from Tong CV I method, take y(1) as training set, y(2) as validation set
+# then we want to predict validation set from training set
+Y1 <- mat_train[folds == 4,]
+Y2 <- mat_train[folds != 4,]
+
+dim(Y1)
+dim(Y2)
+
+S <- cov(t(rbind(Y1,Y2)))
+
+S11 <- S[1:nrow(Y1), 1:nrow(Y1)]
+S22 <- S[(nrow(Y1) + 1):(nrow(Y1)+nrow(Y2)),(nrow(Y1) + 1):(nrow(Y1)+nrow(Y2))]
+S21 <- S[(nrow(Y1) + 1):(nrow(Y1)+nrow(Y2)), 1:nrow(Y1)]
+
+OM <- QUIC::QUIC(S, rho = .1)
+
+OM21 <- OM$X[(nrow(Y1) + 1):(nrow(Y1)+nrow(Y2)), 1:nrow(Y1)]
+OM11 <- OM$X[1:nrow(Y1), 1:nrow(Y1)]
+
+W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
+W_alternative <- solve(S22) %*% S21 # from an exact inversion (note same result with OM = solve(S))
+
+plot(W, W_alternative)
+
+# predict train set from validation set
+est_Y1 <- t(W) %*% Y2
+
+dim(est_Y1)
+
+plot(Y1, est_Y1)
+
+residuals <- est_Y1 - Y1
+
+qqnorm(residuals)
+qqline(residuals)
+
+plot(as.numeric(residuals))
+pheatmap::pheatmap(abs(residuals),
+                   cluster_rows = FALSE,cluster_cols = FALSE)
+
+xx <- colSums(abs(residuals))
+
+head(sort(xx, decreasing = TRUE))
+
+plot(Y1[,"B0285.1c.2"], abs(residuals[,"B0285.1c.2"]))
+
+which(colnames(Y1) == "Y106G6H.2.1")
+
+dim(W)
+
+pca <- prcomp(W)
+tibble(sample_id = rownames(Y2),
+       PC1 = pca$x[,1],
+       PC2 = pca$x[,2]) |>
+  ggplot(aes(x = PC1, y = PC2)) +
   theme_classic() +
-  facet_grid(rows=vars(loss_function), scales = "free_y") +
   geom_point() +
-  geom_line() +
-  geom_errorbar(aes(ymin = mean_loss - sd_loss, ymax = mean_loss + sd_loss),
-                width = .05) #+scale_x_log10()
+  ggrepel::geom_text_repel(aes(label = sample_id))
+
+pca2 <- prcomp(t(W))
+tibble(sample_id = rownames(Y1),
+       PC1 = pca2$x[,1],
+       PC2 = pca2$x[,2]) |>
+  ggplot(aes(x = PC1, y = PC2)) +
+  theme_classic() +
+  geom_point() +
+  ggrepel::geom_text_repel(aes(label = sample_id))
+
+
+# a few really bad or many somewhat bad?
+cumulated_residuals <- colSums(abs(residuals))
+
+hist(cumulated_residuals, breaks = 150)
+head(sort(cumulated_residuals, decreasing = TRUE))
+
+pca <- prcomp(t(Y2))
+tibble(id = colnames(Y2),
+       PC1 = pca$x[,1],
+       PC2 = pca$x[,2],
+       cumul_resid = cumulated_residuals[id],
+       residuals = if_else(cumul_resid > 20, "high",
+                        if_else(cumul_resid < 7, "low",
+                                "average"))) |>
+  ggplot(aes(x = PC1, y = PC2)) +
+  theme_classic() +
+  geom_point(aes(color = cumul_resid, shape = residuals, size = residuals)) +
+  ggrepel::geom_text_repel(aes(label = id)) +
+  scale_size_manual(values = c(1,3,3))
+
+pheatmap::pheatmap(residuals,
+                   cluster_rows = FALSE, cluster_cols = FALSE)
+
+mat_train
+OM <- QUIC::QUIC(mat_train1[folds != 4,], rho = .1)
+OM <- OM$X
+Y <- mat_train1[folds != 4,]
+loss_tong_cv_I(t(Y),OM)
+
+loss_cv_I = map2_dbl(fold, res,
+                     ~loss_tong_cv_I(mat_train[folds != .x,], .y[["X"]]))
+
+OM <- cv_quic$res[[16]][["X"]]
+dimnames(OM) <- dimnames(cv_quic$S_valid[[16]])
+
+
+loss_tong_cv_I(mat_train1[folds != 4,], cv_quic$res[[16]][["X"]])
+
+
+# residuals within a SF/PSI
+plot(residuals[,10])
+hist(abs(residuals))
+
+#~~ re-normalizing ----
+
+hist(mat_sf_train)
+
+par(opar)
+opar <- par(no.readonly = TRUE)
+
+par(mfrow = c(3,3))
+walk(sample(colnames(mat_sf_train2), 9),
+     ~{
+       hist(mat_sf_train2[,.x],
+            main = .x)
+     })
+walk(sample(colnames(mat_psi_train2), 9),
+     ~{
+       hist(mat_psi_train2[,.x],
+            main = .x)
+     })
+
+
+
+mat_sf_train2 <- huge::huge.npn(mat_sf_train)
+mat_psi_train2 <- huge::huge.npn(mat_psi_train)
+
+
+mat_train <- cbind(mat_sf_train2, mat_psi_train2)
+mat_train1 <- cbind(mat_sf_train, mat_psi_train)
+
+
+
+# transformed values
+matplot(mat_train1[,1:3], mat_train[,1:3],
+        # type = 'l',
+        xlab = "Untransformed",
+        ylab = "transformed with NPN")
+
+
+sorted1 <- apply(mat_train1, 2, sort)
+sorted2 <- apply(mat_train, 2, sort)
+
+matplot(sorted1, sorted2,
+        type = 'l',
+        xlab = "Untransformed",
+        ylab = "transformed with NPN")
+
+
+#~~ rerun ----
+
+# from Tong CV I method, take y(1) as training set, y(2) as validation set
+# then we want to predict validation set from training set
+Y1_npn <- mat_train[folds == 4,]
+Y2_npn <- mat_train[folds != 4,]
+
+Y1_untr <- mat_train1[folds == 4,]
+Y2_untr <- mat_train1[folds != 4,]
+
+dim(Y1_npn)
+dim(Y2_npn)
+dim(Y1_untr)
+dim(Y2_untr)
+
+
+S_npn <- cov(t(rbind(Y1_npn,Y2_npn)))
+S_untr <- cov(t(rbind(Y1_untr,Y2_untr)))
+
+
+OM_npn <- QUIC::QUIC(S_npn, rho = .1)
+OM_untr <- QUIC::QUIC(S_untr, rho = .1)
+
+OM21_npn <- OM_npn$X[(nrow(Y1) + 1):(nrow(Y1)+nrow(Y2)), 1:nrow(Y1)]
+OM21_untr <- OM_untr$X[(nrow(Y1) + 1):(nrow(Y1)+nrow(Y2)), 1:nrow(Y1)]
+OM11_npn <- OM_npn$X[1:nrow(Y1), 1:nrow(Y1)]
+OM11_untr <- OM_untr$X[1:nrow(Y1), 1:nrow(Y1)]
+
+W_npn <- - OM21_npn %*% solve(OM11_npn) # based on the estimated precision matrix
+W_untr <- - OM21_untr %*% solve(OM11_untr) # based on the estimated precision matrix
+
+
+# predict train set from validation set
+est_Y1_npn <- t(W_npn) %*% Y2_npn
+est_Y1_untr <- t(W_untr) %*% Y2_untr
+
+dim(est_Y1_npn)
+dim(est_Y1_untr)
+
+plot(Y1_npn, est_Y1_npn)
+plot(Y1_untr, est_Y1_untr)
+
+residuals_npn <- est_Y1_npn - Y1_npn
+residuals_untr <- est_Y1_untr - Y1_untr
+
+
+# how are residuals higher?
+
+plot(Y1_untr, Y1_npn)
+plot(est_Y1_untr, est_Y1_npn)
+plot(residuals_untr, residuals_npn)
+
+plot(Y1_untr, residuals_untr)
+plot(Y1_npn, residuals_npn)
+
+# some examples
+s <- sample(colnames(Y))
+
+
+var_exp_untr <- 1 - abs(residuals_untr)/sqrt(sum(Y1_untr^2))
+var_exp_npn <- 1 - abs(residuals_npn)/sqrt(sum(Y1_npn^2))
+
+pheatmap::pheatmap(var_exp_npn,
+                   cluster_rows = FALSE, cluster_cols = FALSE)
+pheatmap::pheatmap(var_exp_untr,
+                   cluster_rows = FALSE, cluster_cols = FALSE)
+
+hist(var_exp_npn, breaks = 50)
+hist(var_exp_untr, breaks = 50)
+#
 
 
 
 
 
 
+#~ frobenius ----
+loss_frob(cv_quic$S_valid[[16]], cv_quic$res[[16]][["W"]])
 
-fold <- 1
-fold <- fold + 1
-Y <- mat_train[folds != fold,]
+Sts <- cv_quic$S_valid[[16]]
+Str <- cv_quic$res[[16]][["W"]]
+dimnames(Str) <- dimnames(Sts)
 
+loss_frob(Sts, Str)
 
+dim(Str)
 
-S <- cov(t(Y))
-OM_gl <- glasso::glasso(S, rho = .5)
+plot(Str, Sts)
 
-OM <- OM_gl$wi
+image(abs(Sts - Str))
 
-
-N <- nrow(Y)
-
-
-D <- diag(diag(OM))
-
-x1 <- norm(solve(D) %*% OM %*% Y,
-          type = "F")^2
-
-#~ glasso ----
+hist(abs(Sts - Str), breaks = 50) ; abline(v = .5, col = 'gray')
+table(abs(Sts - Str) > .5)
 
 
+image(abs(Sts - Str) > .5)
+
+Sts[1:3,1:3]
+
+nb_psi
+Sts[1:3, 615:622]
+
+pheatmap::pheatmap(1L*(abs(Sts - Str) > .5),
+                   cluster_rows = FALSE,
+                   cluster_cols = FALSE)
+
+xx <- rowSums(abs(Sts - Str) > .5)
+
+head(sort(xx, decreasing = TRUE))
+
+plot(Str["Y106G6H.2.1",], Sts["Y106G6H.2.1",], col = rep(c("gray", "darkred"), times = c(nb_sf, nb_psi)))
+
+Str2 <- cov(mat_train[folds != 4,])
+
+dat_valid <- mat_train[folds == 4,]
+image(dat_valid)
+
+plot(dat_valid[,"Y106G6H.2.1"])
+
+
+
+
+#
 
 
 
 
 
 
+#### Ground truth comparison ----
+
+#~ Create consensus QUIC network ----
+
+res_quic <- cv_quic |> filter(rho == 0.1) |> pull(res) |> lapply(\(.x) .x[["X"]][1:nb_sf, (nb_sf+1):(nb_sf+nb_psi)])
+
+dim(res_quic[[1]])
+
+par(opar)
+opar <- par(no.readonly = TRUE)
+
+par(mfrow = c(1,5))
+walk(res_quic, image)
+
+res_quic[[5]][1:4,1:4]
+
+arr_quic <- array(unlist(res_quic), dim = c(nb_sf, nb_psi, length(unique(folds))))
+
+all.equal(arr_quic[,,5], res_quic[[5]])
+
+mat_quic <- rowMeans(arr_quic, dims = 2)
+
+dim(mat_quic)
+
+image(mat_quic)
 
 
 
 
+#~ Compare with ground truth ----
+
+sf_targets <- jsonlite::read_json("data/export_for_arman/sf_targets_v2.json")
+
+sf2target <- tibble(sf_id = map_chr(sf_targets, \(x) x[["SF"]]),
+                    target_id = map(sf_targets, \(x) x[["targets"]])) |>
+  mutate(sf_id = if_else(sf_id == "mec-8 ad", "mec-8", sf_id),
+         sf_id = map_chr(sf_id,
+                         \(x) `if`(startsWith(x, "WBGene"), x, s2i(x, gids, warn_missing = TRUE)))) |>
+  unnest_longer(target_id) |>
+  filter(target_id != "0") |>
+  mutate(sf_name = i2s(sf_id, gids, warn_missing = FALSE),
+         target_name = i2s(target_id, gids, warn_missing = TRUE))
+
+
+events_coordinates <- read_tsv("data/export_for_arman/221111_events_coordinates.tsv") |>
+  select(event_id, target_id = gene_id)
+
+sf_tx2g <- sf_expression |>
+  select(transcript_id, gene_id, gene_name) |>
+  add_row(transcript_id = "(Intercept)",
+          gene_id =  "(Intercept)",
+          gene_name = "(Intercept)") |>
+  distinct()
+
+convert_sf_tx2g <- function(tx_names, warn_missing = TRUE){
+  res <- sf_tx2g$gene_id[match(tx_names, sf_tx2g$transcript_id, incomparables = NA)]
+  if (warn_missing && any(is.na(res))) {
+    warning("i2s: ", sum(is.na(res)), " tx names could not be converted. NA are returned.")
+  }
+  res
+}
+
+
+dimnames(mat_quic) <- list(colnames(mat_sf),
+                           colnames(mat_psi))
+
+exp_sf2target <- mat_quic |>
+  as.data.frame() |>
+  rownames_to_column("sf_name") |>
+  pivot_longer(-sf_name,
+               names_to = "event_id",
+               values_to = "strength") |>
+  filter(strength != 0) |>
+  left_join(events_coordinates, by = "event_id") |>
+  mutate(sf_id = convert_sf_tx2g(sf_name))
+
+
+rel_exp <- exp_sf2target |> mutate(rel = paste0(sf_id,"-",target_id)) |> pull(rel) |> unique()
+rel_known <- sf2target |>
+  filter(target_id %in% events_coordinates$target_id) |>
+  mutate(rel = paste0(sf_id,"-",target_id)) |>
+  pull(rel) |> 
+  unique()
+rel_rand <- exp_sf2target |> mutate(target_id = sample(target_id)) |>
+  mutate(rel = paste0(sf_id,"-",target_id)) |> pull(rel) |> unique()
+
+table(rel_exp %in% rel_known)
+table(rel_rand %in% rel_known)
+table(rel_known %in% rel_exp)
+table(rel_known %in% rel_rand)
+
+
+exp_sf2target |>
+  left_join(sf2target |> select(sf_id, target_id) |> filter(target_id %in% events_coordinates$target_id) |>add_column(known = 1) |> distinct(),
+            by = c("sf_id", "target_id")) |>
+  mutate(known = if_else(is.na(known), 0, 1) |> as.factor()) |>
+  ggplot() +
+  theme_classic() +
+  geom_boxplot(aes(x = known, y = abs(strength)))
+
+exp_sf2target |>
+  left_join(sf2target |> select(sf_id, target_id) |> filter(target_id %in% events_coordinates$target_id) |> add_column(known = 1) |> distinct(),
+            by = c("sf_id", "target_id")) |>
+  mutate(known = if_else(is.na(known), 0, 1) |> as.factor()) |>
+  ggplot() +
+  theme_classic() +
+  geom_density(aes(x = abs(strength), color = known), adjust = 2)
 
 
 
-####~~~~~~~~~ ----
 
+### ~~~~~~~~~~ ----
 r_gg <- r_gs <- r_ss <- .05
 regul_mat <- rbind(cbind(matrix(r_gg, nrow=nb_sf, ncol = nb_sf),
                          matrix(r_gs, nrow=nb_sf, ncol = nb_psi)),

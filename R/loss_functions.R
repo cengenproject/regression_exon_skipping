@@ -38,12 +38,13 @@ loss_quad <- function(Sts, OMtr){
 }
 
 
-loss_tong_cv_I <- function(Y, OM){
+loss_tong_cv_I <- possibly(function(Y, OM){
   D <- diag(diag(OM))
   
   norm(solve(D) %*% OM %*% t(Y),
-             type = "F")^2
-}
+       type = "F")^2
+},
+otherwise = Inf)
 
 
 
@@ -91,8 +92,40 @@ modif_chol <- function(M){
 }
 
 
-loss_tong_cv_II <- function(Y, OM){
-  mat_T <- modif_chol(OM)
+loss_tong_cv_II <- possibly(
+  function(Y, OM){
+    mat_T <- modif_chol(OM)
+    
+    norm(mat_T %*% t(Y), type = "F")^2
+  },
+  otherwise = Inf)
+
+
+# Proportion of entries that are 0
+mat_sparsity <- function(mat){
   
-  norm(mat_T %*% Y, type = "F")^2
+  sum(mat == 0, na.rm = TRUE)/length(mat)
+}
+
+
+# Fitting a power law to the connectivity, return Rsquare
+mat_power_law <- function(adj){
+
+  connectivity <- colSums(adj != 0)
+  
+  tab <- table(connectivity)
+  if(length(tab) == 1L) return(NA_real_)
+  
+  k <- as.numeric(names(tab))[-1]
+  p_k <- as.numeric(tab)[-1]
+  
+  cor(log10(k), log10(p_k))^2
+}
+
+
+frac_explained_var <- function(resid, measured){
+  SSerr <- rowSums(resid^2)
+  SStot <- apply(measured, 1, \(.x) sum((.x - mean(.x))^2))
+  
+  pmax(1 - SSerr/SStot, 0)
 }
