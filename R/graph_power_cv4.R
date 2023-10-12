@@ -603,7 +603,7 @@ tib_huge |>
 
 
 
-# ARACNE ----
+# ARACNE (make positive definite) ----
 
 
 fold_names <- sort(unique(folds)) |> set_names()
@@ -653,10 +653,6 @@ res_arac <- map(fold_names,
                 },
                 .progress = TRUE)
 
-# qs::qsave(res_huge, "data/intermediates/230920_cv/230921_huge_fixed_lambda.qs")
-
-# res_huge <- qs::qread("data/intermediates/230920_cv/230921_huge_fixed_lambda.qs")
-
 
 
 #~ PSI prediction ----
@@ -690,10 +686,9 @@ tib_arac <- tib_arac |>
          loss_quadratic = map2_dbl(S_valid, OM, ~loss_quad(.x, .y)))
 
 
-# qs::qsave(tib_huge,
-#           "data/intermediates/230920_cv/230921_tib_huge.qs")
+# qs::qsave(tib_arac,
+#           "data/intermediates/230920_cv/230922_tib_arac.qs")
 
-# tib_huge <- qs::qread("data/intermediates/230920_cv/230921_tib_huge.qs")
 
 
 
@@ -709,6 +704,58 @@ tib_arac |>
          mean_FEV = round(mean_FEV, 3),
          loss_quadratic = round(loss_quadratic)) |> 
   clipr::write_clip(na = "NaN")
+
+
+
+
+
+
+
+# ARACNE (direct output) ----
+# do not make positive definite (to keep matrix sparse),
+# do not attempt all the metrics (will be used for ground truth only)
+
+fold_names <- sort(unique(folds)) |> set_names()
+
+
+
+res_arac <- map(fold_names,
+                \(fold){
+                  
+                  train_only <- mat_train[folds != fold, ] |>
+                    huge::huge.npn(verbose = FALSE)
+                  train_psi <- t(train_only[,1:nb_psi])
+                  train_sf <- t(train_only[,(nb_psi+1):(nb_psi+nb_sf)])
+                  
+                  S_train <- cov(t(rbind(train_psi,train_sf)))
+                  
+                  # run estimation!
+                  mim <- minet::build.mim(t(rbind(train_psi,train_sf)))
+                  mim_filt <- mim[rowSums(is.na(mim)) <= 1, colSums(is.na(mim)) <= 1]
+                  arac <- minet::aracne(mim_filt)
+
+                  
+                  
+                  
+                  
+                  list(S_train = S_train,
+                       OM = arac)
+                },
+                .progress = TRUE)
+
+
+
+
+
+
+# extract values
+tib_arac <- transpose(res_arac) |>
+  as_tibble()
+
+
+# qs::qsave(tib_arac,
+#           "data/intermediates/230920_cv/230922_tib_arac_raw.qs")
+
 
 
 
