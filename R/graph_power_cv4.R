@@ -7,6 +7,7 @@ library(tidyverse)
 library(wbData)
 
 gids <- wb_load_gene_ids(281)
+tx2g <- wb_load_tx2gene(281)
 
 source("R/loss_functions.R")
 
@@ -88,6 +89,51 @@ folds <- (rep(1:5,
             sample())[1:nrow(mat_train)]
 
 
+# Get Ground truth ----
+
+
+events_coords <- read_tsv("data/export_for_arman/221111_events_coordinates.tsv") |>
+  select(event_id, gene_id)
+
+all_interactions <- readr::read_tsv("../../biblio_SF/outputs/sf_targets_v3.tsv",
+                                    show_col_types = FALSE)
+
+all_interactions_by_event <- all_interactions |>
+  select(SF, targets) |>
+  distinct() |>
+  left_join(events_coords,
+            by = join_by(targets == gene_id),
+            relationship = "many-to-many") |>
+  filter(!is.na(event_id)) |>
+  select(event_id, SF) |>
+  mutate(sf_tx = wb_g2tx(SF, tx2g)) |>
+  select(-SF) |>
+  unnest(sf_tx) |>
+  distinct() |>
+  add_column(literature = TRUE)
+
+
+
+
+get_coefs_from_OM <- function(OM){
+  
+  OM[startsWith(rownames(OM), "SE_"),
+     !startsWith(colnames(OM), "SE_")] |>
+    as.data.frame() |>
+    rownames_to_column("event_id_percount") |>
+    pivot_longer(cols = -event_id_percount,
+                 names_to = "sf_id",
+                 values_to = "coefficient") |>
+    separate_wider_delim(event_id_percount,
+                         delim = ".",
+                         names = c("event_id", NA)) |>
+    group_by(sf_id, event_id) |>
+    summarize(coefficient = max(coefficient),
+              .groups = "drop") |>
+    left_join(all_interactions_by_event,
+              by = c("event_id", "sf_id" = "sf_tx")) |>
+    mutate(literature = replace_na(literature, FALSE))
+}
 
 
 
@@ -102,12 +148,201 @@ folds <- (rep(1:5,
 
 # QUIC ----
 
-rho_vals <- c(10, 5, 2, 1, .5, .1, .05, .03) |> set_names()
-rho_vals <- c(.4, .3, .2, .09, .08, .07, .06) |> set_names()
+# rho_vals <- c(10, 5,  1, .1) |> set_names()
+
+rho_vals <- c(10, 5, 2, 1, .5, .1, .05, .03,
+              .4, .3, .2, .09, .08, .07, .06) |>
+  set_names()
 
 fold_names <- sort(unique(folds)) |> set_names()
 
+#~ prepare data -----
+res_quic <- expand_grid(fold = fold_names,
+                        permutation = 0:100) |>
+  mutate(
+    # training set
+    psi_train = map2(fold, permutation,
+                     ~{
+                       out <- mat_train[folds != .x, 1:nb_psi] |>
+                         huge::huge.npn(verbose = FALSE)
+                       if(.y){
+                         rownm <- rownames(out)
+                         out <- apply(out, 2, sample)
+                         rownames(out) <- rownm
+                       }
+                       out
+                     }),
+    sf_train = map(fold,
+                   ~{
+                     mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
+                       huge::huge.npn(verbose = FALSE)
+                   }),
+    S_train = map2(psi_train, sf_train,
+                   ~ cov(cbind(.x,.y))),
+    #validation set
+    psi_valid = map(fold,
+                    ~{
+                      mat_train[folds == .x, 1:nb_psi] |>
+                        huge::huge.npn(verbose = FALSE)
+                    }),
+    sf_valid = map(fold,
+                   ~{
+                     mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
+                       huge::huge.npn(verbose = FALSE)
+                   }),
+    
+    S_valid = map2(psi_valid, sf_valid,
+                   ~ cov(cbind(.x,.y)))
+  ) |>
+  #~ estimate precision matrix! -----
+mutate(fit = map(S_train,
+                 ~ QUIC::QUIC(.x,
+                              rho = 1, path = rho_vals,
+                              msg = 0),
+                 .progress = TRUE)) |>
+  # extract estimates
+  mutate(OM = map2(fit, S_train,
+                   \(.fit, .S_train){
+                     map(seq_along(rho_vals) |> set_names(rho_vals),
+                         ~ {
+                           OM <- .fit[["X"]][,, .x ]
+                           dimnames(OM) <- dimnames(.S_train)
+                           OM
+                         })
+                   }),
+         S_train_hat = map2(fit, S_train,
+                            \(.fit, .S_train){
+                              map(seq_along(rho_vals) |> set_names(rho_vals),
+                                  ~ {
+                                    OM <- .fit[["W"]][,, .x ]
+                                    dimnames(OM) <- dimnames(.S_train)
+                                    OM
+                                  })
+                            }))|>
+  unnest(c(OM, S_train_hat))|>
+  mutate(penalty = names(OM) |> as.numeric(),
+         .before = 2)
 
+#~ compute CV estimate of psi ----
+tib_quic <- res_quic |>
+  mutate(psi_estimated = map2(OM, sf_valid,
+                              \(.OM, .sf_valid){
+                                OM21 <- .OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
+                                OM11 <- .OM[1:nb_psi, 1:nb_psi]
+                                
+                                W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
+                                t(t(W) %*% t(.sf_valid))
+                              })) |>
+  # compute metrics
+  mutate(Rsquared = map2_dbl(psi_valid, psi_estimated,
+                             ~ {
+                               lm(as.numeric(.y) ~ as.numeric(.x)) |>
+                                 summary() |>
+                                 (\(x) x[["adj.r.squared"]])()
+                             }),
+         residuals = map2(psi_valid, psi_estimated,
+                          ~ .y - .x),
+         sum_abs_residuals = map_dbl(residuals, ~ sum(abs(.x))),
+         FEV = map2(residuals, psi_valid, ~ frac_explained_var(.x, .y)),
+         mean_FEV = map_dbl(FEV, ~ mean(.x)),
+         loss_frobenius = map2_dbl(S_valid, S_train_hat, ~loss_frob(.x, .y)),
+         loss_quadratic = map2_dbl(S_valid, OM, ~loss_quad(.x, .y)),
+         # process ground truth
+         adj = map(OM, get_coefs_from_OM,
+                   .progress = TRUE),
+         prop_non_zero_coefs_litt = map_dbl(adj,
+                                            ~ mean(.x$coefficient[.x$literature] != 0)),
+         prop_non_zero_coefs_nonlitt = map_dbl(adj,
+                                               ~ mean(.x$coefficient[! .x$literature] != 0)))
+
+# qs::qsave(tib_quic, "data/intermediates/231012_cv/231013_quic.qs")
+# tib_quic <- qs::qread("data/intermediates/231012_cv/231012_quic.qs")
+
+tib_quic |>
+  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
+         mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+  View()
+
+# use permutations
+perm_pval <- function(statistic, permutation){
+  mean(abs(statistic[ !permutation ]) >= abs(statistic[ as.logical(permutation) ]))
+}
+tib_quic |>
+  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
+         mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+  # distinguish when bigger is better or smaller is better, take inverse to invert rank
+  mutate(Rsquared = Rsquared, # bigger better
+         sum_abs_residuals = 1/sum_abs_residuals, #smaller better
+         mean_FEV = mean_FEV,
+         loss_frobenius = 1/loss_frobenius,
+         loss_quadratic = 1/loss_quadratic,
+         prop_non_zero_coefs_litt = prop_non_zero_coefs_litt,
+         prop_non_zero_coefs_nonlitt = prop_non_zero_coefs_nonlitt) |>
+  group_by(penalty, fold) |>
+  summarize(across(-permutation, \(stat) perm_pval(stat, permutation)))
+
+tib_quic |>
+  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
+         mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+  group_by(penalty, fold, permutation == 0) |>
+  summarize(across(-c(permutation), list(mean = mean, sd = sd, pval = perm_pval)))
+
+
+# Plot
+tib_quic |>
+  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
+         mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+  summarize(across(-c(fold), list(mean = mean, sd = sd)), .by = c(penalty,permutation) )|>
+  pivot_longer(-c(penalty, permutation),
+               names_to = c("metric", "type"),
+               names_pattern = "(.+)_(mean|sd)$",
+               values_to = "value") |>
+  pivot_wider(names_from = "type",
+              values_from = "value") |>
+  mutate(metric = fct_inorder(metric)) |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd,
+             shape = permutation == 0, color = permutation == 0)) +
+  theme_classic() +
+  facet_wrap(~metric, scales = "free_y") +
+  geom_point() + geom_line() + geom_errorbar() +
+  scale_x_log10()
+
+
+# export metrics as table
+tib_quic |>
+  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals, mean_FEV, loss_frobenius, loss_quadratic) |>
+  summarize(across(-fold, mean), .by = c(penalty,permutation)) |>
+  arrange(desc(penalty)) |>
+  mutate(Rsquared = round(Rsquared, 3),
+         sum_abs_residuals = format(round(sum_abs_residuals), big.mark = ","),
+         mean_FEV = round(mean_FEV, 3),
+         loss_frobenius = round(loss_frobenius),
+         loss_quadratic = round(loss_quadratic)) |> 
+  clipr::write_clip(na = "NaN")
+
+
+#_____ Old _____ ----
+
+
+
+res_quic[[1]]$psi_measured
+.OM <- res_quic$OM[[1]]
+.sf_valid <- res_quic$sf_valid[[1]]
+
+plot(xx$psi_valid[[4]], xx$psi_estimated[[4]])
+plot(res_quic[[1]]$psi_measured, res_quic[[1]]$psi_estimated[[8]])
+
+
+f_psi_estimated <- lapply(f_OM,
+                          \(OM){
+                            OM21 <- OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
+                            OM11 <- OM[1:nb_psi, 1:nb_psi]
+                            
+                            W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
+                            t(W) %*% vald_sf
+                          }) |> set_names(rho_vals)
+
+S_valid <- cov(t(rbind(vald_psi,vald_sf)))
 
 res_quic <- map(fold_names,
                 \(fold){
@@ -163,7 +398,7 @@ res_quic <- map(fold_names,
                 },
                 .progress = TRUE)
 
-# qs::qsave(res_quic, "data/intermediates/230920_cv/230921_quic.qs")
+qs::qsave(res_quic, "data/intermediates/231012_cv/231012_quic.qs")
 
 # previously ran in 2 passes, combined below
 # res_quic <- qs::qread("data/intermediates/230920_cv/230920_quic.qs")
@@ -733,7 +968,7 @@ res_arac <- map(fold_names,
                   mim <- minet::build.mim(t(rbind(train_psi,train_sf)))
                   mim_filt <- mim[rowSums(is.na(mim)) <= 1, colSums(is.na(mim)) <= 1]
                   arac <- minet::aracne(mim_filt)
-
+                  
                   
                   
                   
