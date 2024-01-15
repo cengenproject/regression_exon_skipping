@@ -157,8 +157,8 @@ rho_vals <- c(10, 5, 2, 1, .5, .1, .05, .03,
 fold_names <- sort(unique(folds)) |> set_names()
 
 #~ prepare data -----
-res_quic <- expand_grid(fold = fold_names,
-                        permutation = 0:100) |>
+res_quic <- expand_grid(fold = fold_names[1:2],
+                        permutation = 0:3) |>
   mutate(
     # training set
     psi_train = map2(fold, permutation,
@@ -197,9 +197,7 @@ res_quic <- expand_grid(fold = fold_names,
   #~ estimate precision matrix! -----
 mutate(fit = map(S_train,
                  ~ QUIC::QUIC(.x,
-                              rho = 1, path = rho_vals,
-                              msg = 0),
-                 .progress = TRUE)) |>
+                              rho = 1, path = rho_vals))) |>
   # extract estimates
   mutate(OM = map2(fit, S_train,
                    \(.fit, .S_train){
@@ -248,27 +246,29 @@ tib_quic <- res_quic |>
          loss_frobenius = map2_dbl(S_valid, S_train_hat, ~loss_frob(.x, .y)),
          loss_quadratic = map2_dbl(S_valid, OM, ~loss_quad(.x, .y)),
          # process ground truth
-         adj = map(OM, get_coefs_from_OM,
-                   .progress = TRUE),
+         adj = map(OM, get_coefs_from_OM),
          prop_non_zero_coefs_litt = map_dbl(adj,
                                             ~ mean(.x$coefficient[.x$literature] != 0)),
          prop_non_zero_coefs_nonlitt = map_dbl(adj,
                                                ~ mean(.x$coefficient[! .x$literature] != 0)))
 
 # qs::qsave(tib_quic, "data/intermediates/231012_cv/231013_quic.qs")
-# tib_quic <- qs::qread("data/intermediates/231012_cv/231012_quic.qs")
+tib_quic <- qs::qread("data/intermediates/231012_cv/231013_quic.qs")
+tib_quic <- qs::qread("data/intermediates/231012_cv/231107_quic_50perm.qs")
 
 tib_quic |>
-  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
-         mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+  select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
+         mean_FEV, loss_frobenius, loss_quadratic,
+         prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
   View()
 
 # use permutations
 perm_pval <- function(statistic, permutation){
-  mean(abs(statistic[ !permutation ]) >= abs(statistic[ as.logical(permutation) ]))
+  # count number of times the null is as big as the observed statistic
+  mean(abs(statistic[ as.logical(permutation) ]) >= abs(statistic[ !permutation ]))
 }
 tib_quic |>
-  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
+  select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
          mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
   # distinguish when bigger is better or smaller is better, take inverse to invert rank
   mutate(Rsquared = Rsquared, # bigger better
@@ -279,18 +279,21 @@ tib_quic |>
          prop_non_zero_coefs_litt = prop_non_zero_coefs_litt,
          prop_non_zero_coefs_nonlitt = prop_non_zero_coefs_nonlitt) |>
   group_by(penalty, fold) |>
-  summarize(across(-permutation, \(stat) perm_pval(stat, permutation)))
+  summarize(across(-permutation, \(stat) perm_pval(stat, permutation))) |> as.data.frame()
 
 tib_quic |>
-  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
-         mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
-  group_by(penalty, fold, permutation == 0) |>
-  summarize(across(-c(permutation), list(mean = mean, sd = sd, pval = perm_pval)))
+  select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
+         mean_FEV, loss_frobenius, loss_quadratic,
+         prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+  group_by(penalty, fold) |>
+  summarize(across(-c(permutation),
+                   list(mean = mean, sd = sd, pval = ~perm_pval(.x, permutation)))) |>
+  as.data.frame()
 
 
 # Plot
 tib_quic |>
-  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals,
+  select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
          mean_FEV, loss_frobenius, loss_quadratic, prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
   summarize(across(-c(fold), list(mean = mean, sd = sd)), .by = c(penalty,permutation) )|>
   pivot_longer(-c(penalty, permutation),
@@ -310,7 +313,7 @@ tib_quic |>
 
 # export metrics as table
 tib_quic |>
-  select(penalty=rho, fold, permutation, Rsquared, sum_abs_residuals, mean_FEV, loss_frobenius, loss_quadratic) |>
+  select(penalty, fold, permutation, Rsquared, sum_abs_residuals, mean_FEV, loss_frobenius, loss_quadratic) |>
   summarize(across(-fold, mean), .by = c(penalty,permutation)) |>
   arrange(desc(penalty)) |>
   mutate(Rsquared = round(Rsquared, 3),

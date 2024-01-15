@@ -224,7 +224,7 @@ res_quic2 <- res_quic1 |> mutate(fit = future_map(S_train,
                                      msg = 0),
                         .progress = TRUE,
 			.options = furrr_options(seed = TRUE)))
-                        
+
   # extract estimates
 res_quic3 <- res_quic2  |> mutate(OM = future_map2(fit, S_train,
                    \(.fit, .S_train){
