@@ -37,12 +37,10 @@ message("---- Prepare data")
 
 #~ PSI -----
 mat_psi <- quantifs_filtered |>
-  mutate(Nincl = round(PSI * nb_reads),
-         Nexcl = round((1-PSI) * nb_reads)) |>
-  select(event_id, sample_id, Nincl, Nexcl) |>
+  select(event_id, sample_id, PSI) |>
   pivot_wider(id_cols = sample_id,
               names_from = event_id,
-              values_from = c(Nincl, Nexcl),
+              values_from = PSI,
               names_vary = "slowest",
               names_glue = "{event_id}.{.value}"
   ) |>
