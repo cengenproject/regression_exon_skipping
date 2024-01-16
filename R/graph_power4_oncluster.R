@@ -11,7 +11,7 @@ message("Starting, ", date())
 suppressPackageStartupMessages(library(tidyverse))
 library(furrr)
 
-plan(multicore, workers = 6)
+plan(multisession, workers = 6)
 
 
 library(wbData)
@@ -170,7 +170,10 @@ get_coefs_from_OM <- function(OM){
 # QUIC ----
 
 
-rho_vals <- c(10, 5, 2, 1, .5, .1) |>
+#rho_vals <- c(10, 5, 2, 1, .5, .1) |>
+#  set_names()
+
+rho_vals <- c(10, 5, 2) |>
   set_names()
 
 fold_names <- sort(unique(folds)) |> set_names()
@@ -179,10 +182,9 @@ message("---- Starting!!")
 
 #~ prepare data -----
 res_quic1 <- expand_grid(fold = fold_names,
-                        permutation = 0:50) |>
-  mutate(
-    # training set
-    psi_train = future_map2(fold, permutation,
+                        permutation = 0:5)
+
+res_quic1$psi_train <- future_map2(res_quic1$fold, res_quic1$permutation,
                      ~{
                        out <- mat_train[folds != .x, 1:nb_psi] |>
                          huge::huge.npn(verbose = FALSE)
@@ -193,40 +195,45 @@ res_quic1 <- expand_grid(fold = fold_names,
                        }
                        out
                      },
-		    .options = furrr_options(seed = TRUE)
-		    ),
-    sf_train = future_map(fold,
+                    .options = furrr_options(seed = TRUE)
+                    )
+
+res_quic1$sf_train <- future_map(res_quic1$fold,
                    ~{
                      mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
                        huge::huge.npn(verbose = FALSE)
-                   }),
-    S_train = future_map2(psi_train, sf_train,
-                   ~ cov(cbind(.x,.y))),
-    #validation set
-    psi_valid = future_map(fold,
+                   })
+
+res_quic1$S_train <- future_map2(res_quic1$psi_train, res_quic1$sf_train,
+                   ~ cov(cbind(.x,.y)))
+
+res_quic1$psi_valid = future_map(res_quic1$fold,
                     ~{
                       mat_train[folds == .x, 1:nb_psi] |>
                         huge::huge.npn(verbose = FALSE)
-                    }),
-    sf_valid = future_map(fold,
+                    })
+
+res_quic1$sf_valid <- future_map(res_quic1$fold,
                    ~{
                      mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
                        huge::huge.npn(verbose = FALSE)
-                   }),
+                   })
     
-    S_valid = future_map2(psi_valid, sf_valid,
+res_quic1$S_valid <- future_map2(res_quic1$psi_valid, res_quic1$sf_valid,
                    ~ cov(cbind(.x,.y)))
-  ) 
+   
+
   #~ estimate precision matrix! -----
-res_quic2 <- res_quic1 |> mutate(fit = future_map(S_train,
+
+res_quic1$fit <- future_map(res_quic1$S_train,
                         ~ QUIC::QUIC(.x,
                                      rho = 1, path = rho_vals,
                                      msg = 0),
                         .progress = TRUE,
-			.options = furrr_options(seed = TRUE)))
+			.options = furrr_options(seed = TRUE))
 
   # extract estimates
-res_quic3 <- res_quic2  |> mutate(OM = future_map2(fit, S_train,
+res_quic1$OM <- future_map2(res_quic1$fit, res_quic1$S_train,
                    \(.fit, .S_train){
                      map(seq_along(rho_vals) |> set_names(rho_vals),
                          ~ {
@@ -234,8 +241,8 @@ res_quic3 <- res_quic2  |> mutate(OM = future_map2(fit, S_train,
                            dimnames(OM) <- dimnames(.S_train)
                            OM
                          })
-                   }),
-         S_train_hat = future_map2(fit, S_train,
+                   })
+res_quic1$S_train_hat <- future_map2(res_quic1$fit, res_quic1$S_train,
                             \(.fit, .S_train){
                               map(seq_along(rho_vals) |> set_names(rho_vals),
                                   ~ {
@@ -243,48 +250,51 @@ res_quic3 <- res_quic2  |> mutate(OM = future_map2(fit, S_train,
                                     dimnames(OM) <- dimnames(.S_train)
                                     OM
                                   })
-                            }))
-res_quic <- res_quic3 |>
+                            })
+
+res_quic <- res_quic1 |>
   unnest(c(OM, S_train_hat))|>
   mutate(penalty = names(OM) |> as.numeric(),
          .before = 2)
 
 #~ compute CV estimate of psi ----
-tib_quic <- res_quic |>
-  mutate(psi_estimated = future_map2(OM, sf_valid,
+res_quic$psi_estimated <- future_map2(res_quic$OM, res_quic$sf_valid,
                               \(.OM, .sf_valid){
                                 OM21 <- .OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
                                 OM11 <- .OM[1:nb_psi, 1:nb_psi]
                                 
                                 W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
                                 t(t(W) %*% t(.sf_valid))
-                              })) |>
+                              })
+
   # compute metrics
-  mutate(Rsquared = future_map2_dbl(psi_valid, psi_estimated,
+res_quic$Rsquared <- future_map2_dbl(res_quic$psi_valid, res_quic$psi_estimated,
                              ~ {
                                lm(as.numeric(.y) ~ as.numeric(.x)) |>
                                  summary() |>
                                  (\(x) x[["adj.r.squared"]])()
-                             }),
-         residuals = future_map2(psi_valid, psi_estimated,
-                          ~ .y - .x),
-         sum_abs_residuals = future_map_dbl(residuals, ~ sum(abs(.x))),
-         FEV = future_map2(residuals, psi_valid, ~ frac_explained_var(.x, .y)),
-         mean_FEV = future_map_dbl(FEV, ~ mean(.x)),
-         loss_frobenius = future_map2_dbl(S_valid, S_train_hat, ~loss_frob(.x, .y)),
-         loss_quadratic = future_map2_dbl(S_valid, OM, ~loss_quad(.x, .y)),
+                             })
+res_quic$residuals = future_map2(res_quic$psi_valid, res_quic$psi_estimated,
+                          ~ .y - .x)
+res_quic$sum_abs_residuals = future_map_dbl(res_quic$residuals, ~ sum(abs(.x)))
+res_quic$FEV = future_map2(res_quic$residuals, res_quic$psi_valid, ~ frac_explained_var(.x, .y))
+res_quic$mean_FEV = future_map_dbl(res_quic$FEV, ~ mean(.x))
+res_quic$loss_frobenius = future_map2_dbl(res_quic$S_valid, res_quic$S_train_hat, ~loss_frob(.x, .y))
+res_quic$loss_quadratic = future_map2_dbl(res_quic$S_valid, res_quic$OM, ~loss_quad(.x, .y))
+
          # process ground truth
-         adj = future_map(OM, get_coefs_from_OM,
-                   .progress = TRUE),
-         prop_non_zero_coefs_litt = future_map_dbl(adj,
-                                            ~ mean(.x$coefficient[.x$literature] != 0)),
-         prop_non_zero_coefs_nonlitt = future_map_dbl(adj,
-                                               ~ mean(.x$coefficient[! .x$literature] != 0)))
+res_quic$adj = future_map(res_quic$OM, get_coefs_from_OM,
+                   .progress = TRUE)
+res_quic$prop_non_zero_coefs_litt = future_map_dbl(res_quic$adj,
+                                            ~ mean(.x$coefficient[.x$literature] != 0))
+res_quic$prop_non_zero_coefs_nonlitt = future_map_dbl(res_quic$adj,
+                                               ~ mean(.x$coefficient[! .x$literature] != 0))
+
 
 message("Saving, ", date())
 
-qs::qsave(tib_quic, file.path(outdir,
-                              "231107_quic_50perm.qs"))
+qs::qsave(res_quic, file.path(outdir,
+                              "240116_quic_test.qs"))
 
 
 message("All done, ", date())
