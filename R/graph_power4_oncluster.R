@@ -193,40 +193,55 @@ res_quic1 <- expand_grid(fold = fold_names,
                        }
                        out
                      },
-		    .options = furrr_options(seed = TRUE)
+		    .options = furrr_options(seed = TRUE,
+		                             globals = c("mat_train", "folds", "nb_psi"))
 		    ),
     sf_train = future_map(fold,
                    ~{
                      mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
                        huge::huge.npn(verbose = FALSE)
-                   }),
+                   },
+                   .options = furrr_options(globals = c("mat_train", "folds", "nb_psi", "nb_sf"))
+                   ),
     S_train = future_map2(psi_train, sf_train,
-                   ~ cov(cbind(.x,.y))),
+                   ~ cov(cbind(.x,.y)),
+                   .options = furrr_options(globals = FALSE)),
     #validation set
     psi_valid = future_map(fold,
                     ~{
                       mat_train[folds == .x, 1:nb_psi] |>
                         huge::huge.npn(verbose = FALSE)
-                    }),
+                    },
+                   .options = furrr_options(globals = c("mat_train", "folds", "nb_psi"))
+                   ),
     sf_valid = future_map(fold,
                    ~{
                      mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
                        huge::huge.npn(verbose = FALSE)
-                   }),
+                   },
+                   .options = furrr_options(globals = c("mat_train", "folds", "nb_psi", "nb_sf"))
+                   ),
     
     S_valid = future_map2(psi_valid, sf_valid,
-                   ~ cov(cbind(.x,.y)))
+                   ~ cov(cbind(.x,.y)),
+                   .options = furrr_options(globals = FALSE))
   ) 
+
   #~ estimate precision matrix! -----
-res_quic2 <- res_quic1 |> mutate(fit = future_map(S_train,
+res_quic2 <- res_quic1 |>
+  mutate(fit = future_map(S_train,
                         ~ QUIC::QUIC(.x,
                                      rho = 1, path = rho_vals,
                                      msg = 0),
                         .progress = TRUE,
-			.options = furrr_options(seed = TRUE)))
+			.options = furrr_options(seed = TRUE,
+                                                 globals = c("rho_vals"))
+                        )
+        )
 
   # extract estimates
-res_quic3 <- res_quic2  |> mutate(OM = future_map2(fit, S_train,
+res_quic3 <- res_quic2  |>
+  mutate(OM = future_map2(fit, S_train,
                    \(.fit, .S_train){
                      map(seq_along(rho_vals) |> set_names(rho_vals),
                          ~ {
@@ -234,7 +249,9 @@ res_quic3 <- res_quic2  |> mutate(OM = future_map2(fit, S_train,
                            dimnames(OM) <- dimnames(.S_train)
                            OM
                          })
-                   }),
+                   },
+                   .options = furrr_options(globals = c("rho_vals"))
+               ),
          S_train_hat = future_map2(fit, S_train,
                             \(.fit, .S_train){
                               map(seq_along(rho_vals) |> set_names(rho_vals),
@@ -243,7 +260,11 @@ res_quic3 <- res_quic2  |> mutate(OM = future_map2(fit, S_train,
                                     dimnames(OM) <- dimnames(.S_train)
                                     OM
                                   })
-                            }))
+                            },
+                            .options = furrr_options(globals = c("rho_vals"))
+                            )
+        )
+
 res_quic <- res_quic3 |>
   unnest(c(OM, S_train_hat))|>
   mutate(penalty = names(OM) |> as.numeric(),
@@ -258,33 +279,46 @@ tib_quic <- res_quic |>
                                 
                                 W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
                                 t(t(W) %*% t(.sf_valid))
-                              })) |>
+                              },
+                              .options = furrr_options(globals = c("nb_psi", "nb_sf"))
+                              )
+        ) |>
   # compute metrics
   mutate(Rsquared = future_map2_dbl(psi_valid, psi_estimated,
                              ~ {
                                lm(as.numeric(.y) ~ as.numeric(.x)) |>
                                  summary() |>
                                  (\(x) x[["adj.r.squared"]])()
-                             }),
+                             },
+                             .options = furrr_options(globals = FALSE)
+                             ),
          residuals = future_map2(psi_valid, psi_estimated,
-                          ~ .y - .x),
-         sum_abs_residuals = future_map_dbl(residuals, ~ sum(abs(.x))),
-         FEV = future_map2(residuals, psi_valid, ~ frac_explained_var(.x, .y)),
-         mean_FEV = future_map_dbl(FEV, ~ mean(.x)),
-         loss_frobenius = future_map2_dbl(S_valid, S_train_hat, ~loss_frob(.x, .y)),
-         loss_quadratic = future_map2_dbl(S_valid, OM, ~loss_quad(.x, .y)),
+                          ~ .y - .x,
+                          .options = furrr_options(globals = FALSE)
+                          ),
+         sum_abs_residuals = future_map_dbl(residuals, ~ sum(abs(.x)), .options = furrr_options(globals = FALSE)),
+         FEV = future_map2(residuals, psi_valid, ~ frac_explained_var(.x, .y), .options = furrr_options(globals = FALSE)),
+         mean_FEV = future_map_dbl(FEV, ~ mean(.x), .options = furrr_options(globals = FALSE)),
+         loss_frobenius = future_map2_dbl(S_valid, S_train_hat, ~loss_frob(.x, .y), .options = furrr_options(globals = FALSE)),
+         loss_quadratic = future_map2_dbl(S_valid, OM, ~loss_quad(.x, .y), .options = furrr_options(globals = FALSE)),
          # process ground truth
          adj = future_map(OM, get_coefs_from_OM,
+                   .options = furrr_options(globals = FALSE),
                    .progress = TRUE),
          prop_non_zero_coefs_litt = future_map_dbl(adj,
-                                            ~ mean(.x$coefficient[.x$literature] != 0)),
+                                            ~ mean(.x$coefficient[.x$literature] != 0),
+                                            .options = furrr_options(globals = FALSE)
+                                            ),
          prop_non_zero_coefs_nonlitt = future_map_dbl(adj,
-                                               ~ mean(.x$coefficient[! .x$literature] != 0)))
+                                               ~ mean(.x$coefficient[! .x$literature] != 0),
+                                               .options = furrr_options(globals = FALSE)
+                                              )
+         )
 
 message("Saving, ", date())
 
 qs::qsave(tib_quic, file.path(outdir,
-                              "231107_quic_50perm.qs"))
+                              "240115_quic_50perm_noglobals.qs"))
 
 
 message("All done, ", date())

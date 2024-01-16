@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --partition=week
+#SBATCH --partition=day
 #SBATCH --job-name=gr_pow4
 #SBATCH -c 6
 #SBATCH --mem-per-cpu=20G
-#SBATCH --time=5-3:10:00
+#SBATCH --time=13:10:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=alexis.weinreb@yale.edu
 
