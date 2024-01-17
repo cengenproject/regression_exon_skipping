@@ -9,9 +9,6 @@ message("Starting, ", date())
 # Inits ----
 
 suppressPackageStartupMessages(library(tidyverse))
-library(furrr)
-
-plan(multisession, workers = 6)
 
 
 library(wbData)
@@ -170,11 +167,9 @@ get_coefs_from_OM <- function(OM){
 # QUIC ----
 
 
-#rho_vals <- c(10, 5, 2, 1, .5, .1) |>
-#  set_names()
-
-rho_vals <- c(10, 5, 2) |>
+rho_vals <- c(.25, .05, .01) |>
   set_names()
+
 
 fold_names <- sort(unique(folds)) |> set_names()
 
@@ -182,9 +177,9 @@ message("---- Starting!!")
 
 #~ prepare data -----
 res_quic1 <- expand_grid(fold = fold_names,
-                        permutation = 0:5)
+                        permutation = 0:200)
 
-res_quic1$psi_train <- future_map2(res_quic1$fold, res_quic1$permutation,
+res_quic1$psi_train <- map2(res_quic1$fold, res_quic1$permutation,
                      ~{
                        out <- mat_train[folds != .x, 1:nb_psi] |>
                          huge::huge.npn(verbose = FALSE)
@@ -194,46 +189,44 @@ res_quic1$psi_train <- future_map2(res_quic1$fold, res_quic1$permutation,
                          rownames(out) <- rownm
                        }
                        out
-                     },
-                    .options = furrr_options(seed = TRUE)
+                     }
                     )
 
-res_quic1$sf_train <- future_map(res_quic1$fold,
+res_quic1$sf_train <- map(res_quic1$fold,
                    ~{
                      mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
                        huge::huge.npn(verbose = FALSE)
                    })
 
-res_quic1$S_train <- future_map2(res_quic1$psi_train, res_quic1$sf_train,
+res_quic1$S_train <- map2(res_quic1$psi_train, res_quic1$sf_train,
                    ~ cov(cbind(.x,.y)))
 
-res_quic1$psi_valid = future_map(res_quic1$fold,
+res_quic1$psi_valid = map(res_quic1$fold,
                     ~{
                       mat_train[folds == .x, 1:nb_psi] |>
                         huge::huge.npn(verbose = FALSE)
                     })
 
-res_quic1$sf_valid <- future_map(res_quic1$fold,
+res_quic1$sf_valid <- map(res_quic1$fold,
                    ~{
                      mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
                        huge::huge.npn(verbose = FALSE)
                    })
     
-res_quic1$S_valid <- future_map2(res_quic1$psi_valid, res_quic1$sf_valid,
+res_quic1$S_valid <- map2(res_quic1$psi_valid, res_quic1$sf_valid,
                    ~ cov(cbind(.x,.y)))
    
 
   #~ estimate precision matrix! -----
 
-res_quic1$fit <- future_map(res_quic1$S_train,
+res_quic1$fit <- map(res_quic1$S_train,
                         ~ QUIC::QUIC(.x,
                                      rho = 1, path = rho_vals,
                                      msg = 0),
-                        .progress = TRUE,
-			.options = furrr_options(seed = TRUE))
+                        .progress = TRUE)
 
   # extract estimates
-res_quic1$OM <- future_map2(res_quic1$fit, res_quic1$S_train,
+res_quic1$OM <- map2(res_quic1$fit, res_quic1$S_train,
                    \(.fit, .S_train){
                      map(seq_along(rho_vals) |> set_names(rho_vals),
                          ~ {
@@ -242,7 +235,7 @@ res_quic1$OM <- future_map2(res_quic1$fit, res_quic1$S_train,
                            OM
                          })
                    })
-res_quic1$S_train_hat <- future_map2(res_quic1$fit, res_quic1$S_train,
+res_quic1$S_train_hat <- map2(res_quic1$fit, res_quic1$S_train,
                             \(.fit, .S_train){
                               map(seq_along(rho_vals) |> set_names(rho_vals),
                                   ~ {
@@ -258,7 +251,7 @@ res_quic <- res_quic1 |>
          .before = 2)
 
 #~ compute CV estimate of psi ----
-res_quic$psi_estimated <- future_map2(res_quic$OM, res_quic$sf_valid,
+res_quic$psi_estimated <- map2(res_quic$OM, res_quic$sf_valid,
                               \(.OM, .sf_valid){
                                 OM21 <- .OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
                                 OM11 <- .OM[1:nb_psi, 1:nb_psi]
@@ -268,33 +261,33 @@ res_quic$psi_estimated <- future_map2(res_quic$OM, res_quic$sf_valid,
                               })
 
   # compute metrics
-res_quic$Rsquared <- future_map2_dbl(res_quic$psi_valid, res_quic$psi_estimated,
+res_quic$Rsquared <- map2_dbl(res_quic$psi_valid, res_quic$psi_estimated,
                              ~ {
                                lm(as.numeric(.y) ~ as.numeric(.x)) |>
                                  summary() |>
                                  (\(x) x[["adj.r.squared"]])()
                              })
-res_quic$residuals = future_map2(res_quic$psi_valid, res_quic$psi_estimated,
+res_quic$residuals = map2(res_quic$psi_valid, res_quic$psi_estimated,
                           ~ .y - .x)
-res_quic$sum_abs_residuals = future_map_dbl(res_quic$residuals, ~ sum(abs(.x)))
-res_quic$FEV = future_map2(res_quic$residuals, res_quic$psi_valid, ~ frac_explained_var(.x, .y))
-res_quic$mean_FEV = future_map_dbl(res_quic$FEV, ~ mean(.x))
-res_quic$loss_frobenius = future_map2_dbl(res_quic$S_valid, res_quic$S_train_hat, ~loss_frob(.x, .y))
-res_quic$loss_quadratic = future_map2_dbl(res_quic$S_valid, res_quic$OM, ~loss_quad(.x, .y))
+res_quic$sum_abs_residuals = map_dbl(res_quic$residuals, ~ sum(abs(.x)))
+res_quic$FEV = map2(res_quic$residuals, res_quic$psi_valid, ~ frac_explained_var(.x, .y))
+res_quic$mean_FEV = map_dbl(res_quic$FEV, ~ mean(.x))
+res_quic$loss_frobenius = map2_dbl(res_quic$S_valid, res_quic$S_train_hat, ~loss_frob(.x, .y))
+res_quic$loss_quadratic = map2_dbl(res_quic$S_valid, res_quic$OM, ~loss_quad(.x, .y))
 
          # process ground truth
-res_quic$adj = future_map(res_quic$OM, get_coefs_from_OM,
+res_quic$adj = map(res_quic$OM, get_coefs_from_OM,
                    .progress = TRUE)
-res_quic$prop_non_zero_coefs_litt = future_map_dbl(res_quic$adj,
+res_quic$prop_non_zero_coefs_litt = map_dbl(res_quic$adj,
                                             ~ mean(.x$coefficient[.x$literature] != 0))
-res_quic$prop_non_zero_coefs_nonlitt = future_map_dbl(res_quic$adj,
+res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
                                                ~ mean(.x$coefficient[! .x$literature] != 0))
 
 
 message("Saving, ", date())
 
 qs::qsave(res_quic, file.path(outdir,
-                              "240116_quic_test.qs"))
+                              "240117_quic_smallPenalties_200perm.qs"))
 
 
 message("All done, ", date())
