@@ -18,6 +18,7 @@ gids <- wb_load_gene_ids(281)
 tx2g <- wb_load_tx2gene(281)
 
 source("R/loss_functions.R")
+source("R/transformation_functions.R")
 
 datadir <- "data/graph_power4/inputs"
 outdir <- "data/graph_power4/outputs"
@@ -166,7 +167,7 @@ get_coefs_from_OM <- function(OM){
 # QUIC ----
 
 
-rho_vals <- c(10, 5, 2, 1, .5, .1, .05) |>
+rho_vals <- c(10, 5, 2, 1) |>
   set_names()
 
 
@@ -181,7 +182,7 @@ res_quic1 <- expand_grid(fold = fold_names,
 res_quic1$psi_train <- map2(res_quic1$fold, res_quic1$permutation,
                      ~{
                        out <- mat_train[folds != .x, 1:nb_psi] |>
-                         huge::huge.npn(verbose = FALSE)
+                         transform_npn_shrinkage()
                        if(.y){
                          rownm <- rownames(out)
                          out <- apply(out, 2, sample)
@@ -194,7 +195,7 @@ res_quic1$psi_train <- map2(res_quic1$fold, res_quic1$permutation,
 res_quic1$sf_train <- map(res_quic1$fold,
                    ~{
                      mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                       huge::huge.npn(verbose = FALSE)
+                       transform_npn_shrinkage()
                    })
 
 res_quic1$S_train <- map2(res_quic1$psi_train, res_quic1$sf_train,
@@ -203,13 +204,13 @@ res_quic1$S_train <- map2(res_quic1$psi_train, res_quic1$sf_train,
 res_quic1$psi_valid = map(res_quic1$fold,
                     ~{
                       mat_train[folds == .x, 1:nb_psi] |>
-                        huge::huge.npn(verbose = FALSE)
+                        transform_npn_shrinkage()
                     })
 
 res_quic1$sf_valid <- map(res_quic1$fold,
                    ~{
                      mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                       huge::huge.npn(verbose = FALSE)
+                       transform_npn_shrinkage()
                    })
     
 res_quic1$S_valid <- map2(res_quic1$psi_valid, res_quic1$sf_valid,
@@ -290,14 +291,14 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 
 
-out_name <- "240118_quic_7penlt_noperm"
+out_name <- "240118_tests"
 
 message("Saving as, ", out_name, " at ", date())
 
 qs::qsave(res_quic, file.path(outdir,
                               paste0(out_name, ".qs")))
 
-tib_quic |>
+res_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
                 mean_FEV, loss_frobenius, loss_quadratic,
                 prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
