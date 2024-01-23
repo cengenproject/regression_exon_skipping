@@ -139,9 +139,8 @@ get_coefs_from_OM <- function(OM){
     pivot_longer(cols = -event_id_percount,
                  names_to = "sf_id",
                  values_to = "coefficient") |>
-    separate_wider_delim(event_id_percount,
-                         delim = ".",
-                         names = c("event_id", NA)) |>
+    mutate(event_id = str_extract(event_id_percount, "^SE_[0-9]+")) |>
+    select(-event_id_percount) |>
     group_by(sf_id, event_id) |>
     summarize(coefficient = max(coefficient),
               .groups = "drop") |>
