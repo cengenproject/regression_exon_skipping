@@ -11,12 +11,12 @@
 #  readr::write_csv("data/graph_power4/outputs/231107_quic_50perm.csv")
 
 
-tib_quic <- qs::qread("data/graph_power4/outputs/240116_6penlti_50perm.qs")
+tib_quic <- qs::qread("data/graph_power4/outputs/240118_quic_7penlt_noperm.qs")
 
 tib_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
                 mean_FEV, loss_frobenius, loss_quadratic,
                 prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
-  readr::write_csv("data/graph_power4/outputs/240116_6penlti_50perm.csv")
+  readr::write_csv("data/graph_power4/outputs/240118_quic_7penlt_noperm.csv")
 
 

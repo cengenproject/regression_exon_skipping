@@ -167,7 +167,7 @@ get_coefs_from_OM <- function(OM){
 # QUIC ----
 
 
-rho_vals <- c(.25, .05, .01) |>
+rho_vals <- c(10, 5, 2, 1, .5, .1, .05) |>
   set_names()
 
 
@@ -177,7 +177,7 @@ message("---- Starting!!")
 
 #~ prepare data -----
 res_quic1 <- expand_grid(fold = fold_names,
-                        permutation = 0:200)
+                        permutation = 0)
 
 res_quic1$psi_train <- map2(res_quic1$fold, res_quic1$permutation,
                      ~{
@@ -225,6 +225,8 @@ res_quic1$fit <- map(res_quic1$S_train,
                                      msg = 0),
                         .progress = TRUE)
 
+message("Done estimating precision matrix")
+
   # extract estimates
 res_quic1$OM <- map2(res_quic1$fit, res_quic1$S_train,
                    \(.fit, .S_train){
@@ -235,6 +237,8 @@ res_quic1$OM <- map2(res_quic1$fit, res_quic1$S_train,
                            OM
                          })
                    })
+message("Done extracting OM")
+
 res_quic1$S_train_hat <- map2(res_quic1$fit, res_quic1$S_train,
                             \(.fit, .S_train){
                               map(seq_along(rho_vals) |> set_names(rho_vals),
@@ -244,6 +248,8 @@ res_quic1$S_train_hat <- map2(res_quic1$fit, res_quic1$S_train,
                                     OM
                                   })
                             })
+
+message("Done extracting S_train_hat")
 
 res_quic <- res_quic1 |>
   unnest(c(OM, S_train_hat))|>
@@ -284,10 +290,20 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
                                                ~ mean(.x$coefficient[! .x$literature] != 0))
 
 
-message("Saving, ", date())
+
+out_name <- "240118_quic_7penlt_noperm"
+
+message("Saving as, ", out_name, " at ", date())
 
 qs::qsave(res_quic, file.path(outdir,
-                              "240117_quic_smallPenalties_200perm.qs"))
+                              paste0(out_name, ".qs")))
+
+tib_quic |>
+  dplyr::select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
+                mean_FEV, loss_frobenius, loss_quadratic,
+                prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+  readr::write_csv(file.path(outdir,
+                              paste0(out_name, ".csv")))
 
 
 message("All done, ", date())
