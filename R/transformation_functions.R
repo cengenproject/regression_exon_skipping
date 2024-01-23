@@ -1,5 +1,7 @@
 transform_npn_shrinkage <- function(mat, parameters = NULL){
-  huge::huge.npn(mat, verbose = FALSE)
+   mat_trans <- huge::huge.npn(mat, verbose = FALSE)
+   
+   list(mat = mat_trans, parameters = list())
 }
 
 

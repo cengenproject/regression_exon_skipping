@@ -184,9 +184,9 @@ res_quic1$psi_train <- map2(res_quic1$fold, res_quic1$permutation,
                        out <- mat_train[folds != .x, 1:nb_psi] |>
                          transform_npn_shrinkage()
                        if(.y){
-                         rownm <- rownames(out)
-                         out <- apply(out, 2, sample)
-                         rownames(out) <- rownm
+                         rownm <- rownames(out$mat)
+                         out$mat <- apply(out$mat, 2, sample)
+                         rownames(out$mat) <- rownm
                        }
                        out
                      }
@@ -199,7 +199,7 @@ res_quic1$sf_train <- map(res_quic1$fold,
                    })
 
 res_quic1$S_train <- map2(res_quic1$psi_train, res_quic1$sf_train,
-                   ~ cov(cbind(.x,.y)))
+                   ~ cov(cbind(.x$mat, .y$mat)))
 
 res_quic1$psi_valid = map(res_quic1$fold,
                     ~{
@@ -214,7 +214,7 @@ res_quic1$sf_valid <- map(res_quic1$fold,
                    })
     
 res_quic1$S_valid <- map2(res_quic1$psi_valid, res_quic1$sf_valid,
-                   ~ cov(cbind(.x,.y)))
+                   ~ cov(cbind(.x$mat, .y$mat)))
    
 
   #~ estimate precision matrix! -----
@@ -263,20 +263,20 @@ res_quic$psi_estimated <- map2(res_quic$OM, res_quic$sf_valid,
                                 OM11 <- .OM[1:nb_psi, 1:nb_psi]
                                 
                                 W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
-                                t(t(W) %*% t(.sf_valid))
+                                t(t(W) %*% t(.sf_valid$mat))
                               })
 
   # compute metrics
 res_quic$Rsquared <- map2_dbl(res_quic$psi_valid, res_quic$psi_estimated,
                              ~ {
-                               lm(as.numeric(.y) ~ as.numeric(.x)) |>
+                               lm(as.numeric(.y) ~ as.numeric(.x$mat)) |>
                                  summary() |>
                                  (\(x) x[["adj.r.squared"]])()
                              })
 res_quic$residuals = map2(res_quic$psi_valid, res_quic$psi_estimated,
-                          ~ .y - .x)
+                          ~ .y - .x$mat)
 res_quic$sum_abs_residuals = map_dbl(res_quic$residuals, ~ sum(abs(.x)))
-res_quic$FEV = map2(res_quic$residuals, res_quic$psi_valid, ~ frac_explained_var(.x, .y))
+res_quic$FEV = map2(res_quic$residuals, res_quic$psi_valid, ~ frac_explained_var(.x, .y$mat))
 res_quic$mean_FEV = map_dbl(res_quic$FEV, ~ mean(.x))
 res_quic$loss_frobenius = map2_dbl(res_quic$S_valid, res_quic$S_train_hat, ~loss_frob(.x, .y))
 res_quic$loss_quadratic = map2_dbl(res_quic$S_valid, res_quic$OM, ~loss_quad(.x, .y))
@@ -289,9 +289,9 @@ res_quic$prop_non_zero_coefs_litt = map_dbl(res_quic$adj,
 res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
                                                ~ mean(.x$coefficient[! .x$literature] != 0))
 
+# Save ----
 
-
-out_name <- "240118_tests"
+out_name <- "240118_tests_object"
 
 message("Saving as, ", out_name, " at ", date())
 
