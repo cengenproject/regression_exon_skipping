@@ -1,7 +1,9 @@
 transform_npn_shrinkage <- function(mat, parameters = NULL){
-   mat_trans <- huge::huge.npn(mat, verbose = FALSE)
+  
+  mat_trans = qnorm(apply(mat, 2, rank)/(nrow(mat) + 1))
+  mat_trans/sd(mat_trans[, 1])
    
-   list(mat = mat_trans, parameters = list())
+  list(mat = mat_trans, parameters = list())
 }
 
 
