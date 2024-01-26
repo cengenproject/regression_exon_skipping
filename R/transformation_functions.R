@@ -47,8 +47,12 @@ project_rank <- function(vec_to_transform, original_vec){
 transform_npn_shrinkage <- function(mat, parameters = NULL){
   
   if(!is.null(parameters)){
-    stopifnot(identical(names(parameters),
-                        c("reference_mat", "sd_first_col")))
+    stopifnot(identical( names(parameters),
+                         c("reference_mat", "sd_first_col")
+                        ))
+    stopifnot(identical( colnames(mat),
+                         colnames(parameters$reference_mat)
+                        ))
     params_given <- TRUE
   } else{
     parameters <- list()
@@ -68,7 +72,7 @@ transform_npn_shrinkage <- function(mat, parameters = NULL){
     mat_trans <- mat_trans/(nrow(parameters$reference_mat) + 1)
   }
   
-  mat_trans = qnorm(mat_trans)
+  mat_trans <- qnorm(mat_trans)
   
   if(params_given){
     sd_first_col <- parameters$sd_first_col
@@ -110,7 +114,7 @@ transform_npn_shrinkage <- function(mat, parameters = NULL){
 # # test that we can transform a single row
 # bb <- transform_npn_shrinkage(mat_psi_train)
 # aa <- transform_npn_shrinkage(mat_psi_test[5,,drop=FALSE], bb$parameters)$mat
-# aa
+# aa[,1:3]
 # 
 # plot(log10(mat_psi_train), bb$mat)
 # points(log10(mat_psi_test[5,]), aa, col = 'red')
