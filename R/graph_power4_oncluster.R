@@ -291,7 +291,7 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 # Save ----
 
-out_name <- "240118_tests_man_npn"
+out_name <- "240126_tests_parmaterized_npn"
 
 message("Saving as, ", out_name, " at ", date())
 
