@@ -167,7 +167,7 @@ get_coefs_from_OM <- function(OM){
 # QUIC ----
 
 
-rho_vals <- c(10, 5, 2, 1) |>
+rho_vals <- c(10, 5, 2, 1, .5, .1, .05) |>
   set_names()
 
 
@@ -291,7 +291,7 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 # Save ----
 
-out_name <- "240126_tests_use_parameters_npn"
+out_name <- "240126_params_noperm_7penalties"
 
 message("Saving as, ", out_name, " at ", date())
 
