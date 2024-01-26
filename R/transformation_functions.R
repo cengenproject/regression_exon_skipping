@@ -14,7 +14,7 @@ which_smallest_positive <- function(a){
 }
 
 transform_one_value <- function(y1, x){
-  if(is.na(y1)) return(length(x[!is.na(x)]) + 1)
+  if(is.na(y1)) return(length(x[!is.na(x)]))
   
   if(y1 < min(x, na.rm = TRUE)){
     right_neighbor <- which_smallest_positive( -(y1 - x))
