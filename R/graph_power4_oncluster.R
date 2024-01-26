@@ -201,16 +201,16 @@ res_quic1$sf_train <- map(res_quic1$fold,
 res_quic1$S_train <- map2(res_quic1$psi_train, res_quic1$sf_train,
                    ~ cov(cbind(.x$mat, .y$mat)))
 
-res_quic1$psi_valid = map(res_quic1$fold,
+res_quic1$psi_valid = map2(res_quic1$fold, res_quic1$psi_train,
                     ~{
                       mat_train[folds == .x, 1:nb_psi] |>
-                        transform_npn_shrinkage()
+                        transform_npn_shrinkage(.y[["parameters"]])
                     })
 
-res_quic1$sf_valid <- map(res_quic1$fold,
+res_quic1$sf_valid <- map2(res_quic1$fold, res_quic1$sf_train,
                    ~{
                      mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                       transform_npn_shrinkage()
+                       transform_npn_shrinkage(.y[["parameters"]])
                    })
     
 res_quic1$S_valid <- map2(res_quic1$psi_valid, res_quic1$sf_valid,
@@ -257,7 +257,7 @@ res_quic <- res_quic1 |>
          .before = 2)
 
 #~ compute CV estimate of psi ----
-res_quic$psi_estimated <- map2(res_quic$OM, res_quic$sf_valid,
+res_quic$psi_valid_hat <- map2(res_quic$OM, res_quic$sf_valid,
                               \(.OM, .sf_valid){
                                 OM21 <- .OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
                                 OM11 <- .OM[1:nb_psi, 1:nb_psi]
@@ -267,13 +267,13 @@ res_quic$psi_estimated <- map2(res_quic$OM, res_quic$sf_valid,
                               })
 
   # compute metrics
-res_quic$Rsquared <- map2_dbl(res_quic$psi_valid, res_quic$psi_estimated,
+res_quic$Rsquared <- map2_dbl(res_quic$psi_valid, res_quic$psi_valid_hat,
                              ~ {
                                lm(as.numeric(.y) ~ as.numeric(.x$mat)) |>
                                  summary() |>
                                  (\(x) x[["adj.r.squared"]])()
                              })
-res_quic$residuals = map2(res_quic$psi_valid, res_quic$psi_estimated,
+res_quic$residuals = map2(res_quic$psi_valid, res_quic$psi_valid_hat,
                           ~ .y - .x$mat)
 res_quic$sum_abs_residuals = map_dbl(res_quic$residuals, ~ sum(abs(.x)))
 res_quic$FEV = map2(res_quic$residuals, res_quic$psi_valid, ~ frac_explained_var(.x, .y$mat))
@@ -291,7 +291,7 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 # Save ----
 
-out_name <- "240126_tests_parmaterized_npn"
+out_name <- "240126_tests_use_parameters_npn"
 
 message("Saving as, ", out_name, " at ", date())
 

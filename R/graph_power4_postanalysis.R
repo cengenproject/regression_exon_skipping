@@ -76,6 +76,7 @@ tib_quic <- read_csv("data/graph_power4/outputs/240118_tests.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240118_tests_object.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240118_tests_man_npn.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_parmaterized_npn.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_use_parameters_npn.csv")
 
 
 
