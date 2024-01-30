@@ -142,6 +142,71 @@ transform_npn_shrinkage <- function(mat, parameters = NULL){
 #                  nrow = 1))
 
 
+# Reverse ----
+
+rev_transform_one_rank <- function(r1, x){
+  rank_x <- rank(x)
+  
+  left_neighbor <- which_smallest_positive(r1 - rank_x)
+  right_neighbor <- which_smallest_positive( -(r1 - rank_x))
+  
+  if(x[right_neighbor] == x[left_neighbor]) return(x[left_neighbor])
+  
+  x[left_neighbor] + (r1 - rank_x[left_neighbor])*(x[right_neighbor] - x[left_neighbor])/(rank_x[right_neighbor] - rank_x[left_neighbor])
+}
+
+rev_project_rank <- function(rk_y, x_reference){
+  map_dbl(rk_y, rev_transform_one_rank, x_reference)
+}
+
+y <- c(10, 12)
+x <- c(10,10,30)
+x <- runif(100,0,100)
+y <- runif(200, -10, 110)
+
+y <- 32
+
+all.equal(project_rank(y,x) |> rev_project_rank(x),
+          y)
+
+
+
+rk <- project_rank(y,x)
+
+x
+rk
+
+rk * diff(range(x)) + min(x)
+
+r1 <- rk[[2]]
+
+
+
+
+
+
+
+mat_trans <- matrix(nrow = nrow(mat),
+                    ncol = ncol(mat))
+for(col in seq_len(ncol(mat))){
+  mat_trans[,col] <- project_rank(mat[,col], parameters$reference_mat[,col])
+}
+dimnames(mat_trans) <- dimnames(mat)
+mat_trans <- mat_trans/(nrow(parameters$reference_mat) + 1)
+
+
+mat_trans <- qnorm(mat_trans)
+
+sd_first_col <- parameters$sd_first_col
+
+mat_trans = mat_trans/sd_first_col
+
+
+
+
+
+# ~~~~~~~~~~~ ----
+
 
 
 
