@@ -123,9 +123,9 @@ mat_power_law <- function(adj){
 }
 
 
-frac_explained_var <- function(resid, measured){
-  SSerr <- rowSums(resid^2)
-  SStot <- apply(measured, 1, \(.x) sum((.x - mean(.x))^2))
+frac_explained_var <- function(resid, measured, na.rm = FALSE){
+  SSerr <- rowSums(resid^2, na.rm = na.rm)
+  SStot <- apply(measured, 1, \(.x) sum((.x - mean(.x, na.rm = na.rm))^2, na.rm = na.rm))
   
   pmax(1 - SSerr/SStot, 0)
 }

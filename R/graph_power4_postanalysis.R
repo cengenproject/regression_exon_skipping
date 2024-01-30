@@ -3,7 +3,7 @@
 
 
 # From cluster ----
-
+library(tidyverse) |> suppressPackageStartupMessages()
 
 
 
@@ -12,6 +12,7 @@
 tib_quic <- read_csv("data/intermediates/231109_permutations_cv/231107_quic_50perm_nosep.csv")
 tib_quic <- read_csv("data/intermediates/231109_permutations_cv/240116_6penlti_50perm.csv")
 tib_quic <- read_csv("data/intermediates/231109_permutations_cv/240118_quic_7penlt_noperm.csv")
+tib_quic <- read_csv("data/intermediates/231109_permutations_cv/240126_params_noperm_7penalties.csv")
 
 
 # use permutations
@@ -77,6 +78,8 @@ tib_quic <- read_csv("data/graph_power4/outputs/240118_tests_object.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240118_tests_man_npn.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_parmaterized_npn.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_use_parameters_npn.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_params_nosepPSI.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240130_tests_revert_psi.csv")
 
 
 
