@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="AW">
+
+<title>Graph Power Counter POC</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="graph_power_counter_poc_files/libs/clipboard/clipboard.min.js"></script>
+<script src="graph_power_counter_poc_files/libs/quarto-html/quarto.js"></script>
+<script src="graph_power_counter_poc_files/libs/quarto-html/popper.min.js"></script>
+<script src="graph_power_counter_poc_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="graph_power_counter_poc_files/libs/quarto-html/anchor.min.js"></script>
+<link href="graph_power_counter_poc_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="graph_power_counter_poc_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="graph_power_counter_poc_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="graph_power_counter_poc_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="graph_power_counter_poc_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Graph Power Counter POC</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>AW </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="principle" class="level2">
+<h2 class="anchored" data-anchor-id="principle">Principle</h2>
+<p>We can use various methods to estimate (infer) the pecision matrix (the inverse of the covariance matrix) for a sample, and use it as a graph. To compare the methods, we want to use Cross-Validation: only include training samples to infer the precision matrix, use the test samples to verify its accuracy.</p>
+</section>
+<section id="dataset" class="level2">
+<h2 class="anchored" data-anchor-id="dataset">Dataset</h2>
+<p>We start with the real dataset, we have a set of 618 SF and a set of 129 PSI, both measured in 155 samples. We split these into train (108 samples) and test (47 samples).</p>
+<p>We assemble them by column:</p>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<div>
+<svg width="672" height="480" viewbox="0.00 0.00 470.00 119.80" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 115.8)">
+<title>
+D
+</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-115.8 466,-115.8 466,4 -4,4"></polygon> <g id="clust1" class="cluster">
+<title>
+cluster_SF
+</title>
+<polygon fill="none" stroke="black" points="8,-8 8,-103.8 101,-103.8 101,-8 8,-8"></polygon> <text text-anchor="middle" x="54.5" y="-87.2" font-family="Times,serif" font-size="14.00">SF (176x618)</text> </g> <g id="clust2" class="cluster">
+<title>
+cluster_PSI
+</title>
+<polygon fill="none" stroke="black" points="109,-8 109,-103.8 207,-103.8 207,-8 109,-8"></polygon> <text text-anchor="middle" x="158" y="-87.2" font-family="Times,serif" font-size="14.00">PSI (176x129)</text> </g> <g id="clust3" class="cluster">
+<title>
+cluster_train
+</title>
+<polygon fill="none" stroke="black" points="215,-17 215,-94.8 337,-94.8 337,-17 215,-17"></polygon> <text text-anchor="middle" x="276" y="-78.2" font-family="Times,serif" font-size="14.00">train set (108x747)</text> </g> <g id="clust4" class="cluster">
+<title>
+cluster_test
+</title>
+<polygon fill="none" stroke="black" points="345,-17 345,-94.8 454,-94.8 454,-17 345,-17"></polygon> <text text-anchor="middle" x="399.5" y="-78.2" font-family="Times,serif" font-size="14.00">test set (47x747)</text> </g> <!-- node_A --> <g id="node1" class="node">
+<title>
+node_A
+</title>
+<polygon fill="none" stroke="black" points="17.5,-16.5 17.5,-70.5 90.5,-70.5 90.5,-16.5 17.5,-16.5"></polygon> <polygon fill="#ee3b3b" stroke="transparent" points="28,-44.5 28,-64.5 81,-64.5 81,-44.5 28,-44.5"></polygon> <text text-anchor="start" x="29.6" y="-49.9" font-family="Arial" font-size="14.00">train set</text> <polygon fill="#8b2323" stroke="transparent" points="28,-22.5 28,-42.5 81,-42.5 81,-22.5 28,-22.5"></polygon> <text text-anchor="start" x="31.93" y="-27.9" font-family="Arial" font-size="14.00">test set</text> </g> <!-- node_B --> <g id="node2" class="node">
+<title>
+node_B
+</title>
+<polygon fill="none" stroke="black" points="121.5,-16.5 121.5,-70.5 194.5,-70.5 194.5,-16.5 121.5,-16.5"></polygon> <polygon fill="#ee7621" stroke="transparent" points="132,-44.5 132,-64.5 185,-64.5 185,-44.5 132,-44.5"></polygon> <text text-anchor="start" x="133.6" y="-49.9" font-family="Arial" font-size="14.00">train set</text> <polygon fill="#8b4513" stroke="transparent" points="132,-22.5 132,-42.5 185,-42.5 185,-22.5 132,-22.5"></polygon> <text text-anchor="start" x="135.93" y="-27.9" font-family="Arial" font-size="14.00">test set</text> </g> <!-- node_C --> <g id="node3" class="node">
+<title>
+node_C
+</title>
+<polygon fill="none" stroke="black" points="241.5,-25.5 241.5,-61.5 310.5,-61.5 310.5,-25.5 241.5,-25.5"></polygon> <polygon fill="#ee3b3b" stroke="transparent" points="252,-33.5 252,-53.5 273,-53.5 273,-33.5 252,-33.5"></polygon> <text text-anchor="start" x="253.56" y="-38.9" font-family="Arial" font-size="14.00">SF</text> <polygon fill="#ee7621" stroke="transparent" points="275,-33.5 275,-53.5 301,-53.5 301,-33.5 275,-33.5"></polygon> <text text-anchor="start" x="276.72" y="-38.9" font-family="Arial" font-size="14.00">PSI</text> </g> <!-- node_D --> <g id="node4" class="node">
+<title>
+node_D
+</title>
+<polygon fill="none" stroke="black" points="364.5,-25.5 364.5,-61.5 433.5,-61.5 433.5,-25.5 364.5,-25.5"></polygon> <polygon fill="#8b2323" stroke="transparent" points="375,-33.5 375,-53.5 396,-53.5 396,-33.5 375,-33.5"></polygon> <text text-anchor="start" x="376.56" y="-38.9" font-family="Arial" font-size="14.00">SF</text> <polygon fill="#8b4513" stroke="transparent" points="398,-33.5 398,-53.5 424,-53.5 424,-33.5 398,-33.5"></polygon> <text text-anchor="start" x="399.72" y="-38.9" font-family="Arial" font-size="14.00">PSI</text> </g> </g>
+</svg>
+</div>
+</div>
+</div>
+</div>
+<p>Code to load and prepare this data:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Inits ----</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>(<span class="fu">library</span>(tidyverse))</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>quantifs_filtered <span class="ot">&lt;-</span> qs<span class="sc">::</span><span class="fu">qread</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"data/intermediates/simultation/230206_preprocessed_quantifs_filtered.qs"</span>))</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>sf_expression <span class="ot">&lt;-</span> qs<span class="sc">::</span><span class="fu">qread</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"data/intermediates/simultation/230206_preprocessed_sf_expression.qs"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(transcript_id <span class="sc">!=</span> <span class="st">"R07E5.14.2"</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Prepare data ----</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">#~ PSI -----</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>mat_psi <span class="ot">&lt;-</span> quantifs_filtered <span class="sc">|&gt;</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">dPSI =</span> PSI <span class="sc">-</span> <span class="fu">mean</span>(PSI),</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>         <span class="at">.by =</span> event_id) <span class="sc">|&gt;</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(event_id, sample_id, dPSI) <span class="sc">|&gt;</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">id_cols =</span> sample_id, <span class="at">names_from =</span> event_id, <span class="at">values_from =</span> dPSI) <span class="sc">|&gt;</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">column_to_rownames</span>(<span class="st">"sample_id"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.matrix</span>()</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># filter PSI</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="co"># remove samples full of NA</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>mat_psi <span class="ot">&lt;-</span> mat_psi[<span class="fu">rowMeans</span>(<span class="fu">is.na</span>(mat_psi)) <span class="sc">&lt;</span> .<span class="dv">4</span>, ]</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Train/test split: note we do that BEFORE imputation</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>train_samples <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">rownames</span>(mat_psi), <span class="at">size =</span> .<span class="dv">7</span><span class="sc">*</span><span class="fu">nrow</span>(mat_psi))</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>test_samples <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(<span class="fu">rownames</span>(mat_psi), train_samples)</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>mat_psi_train <span class="ot">&lt;-</span> mat_psi[train_samples,]</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="co"># Impute the rest of the NAs</span></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="co"># note: Park, Wang and Lim (2020)</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="co">#https://arxiv.org/abs/2006.04632 try a few imputation methods,</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="co"># {impute} seems OK</span></span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>mat_psi_train <span class="ot">&lt;-</span> impute<span class="sc">::</span><span class="fu">impute.knn</span>(mat_psi_train)<span class="sc">$</span>data</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="co">#~ SF TPM ----</span></span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>mat_sf <span class="ot">&lt;-</span> sf_expression <span class="sc">|&gt;</span></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">logTPM =</span> <span class="fu">log</span>(TPM <span class="sc">+</span> <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(transcript_id, sample_id, logTPM) <span class="sc">|&gt;</span></span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">id_cols =</span> sample_id,</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>              <span class="at">names_from =</span> <span class="st">"transcript_id"</span>,</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>              <span class="at">values_from =</span> <span class="st">"logTPM"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>  <span class="fu">column_to_rownames</span>(<span class="st">"sample_id"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.matrix</span>()</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>mat_sf_train <span class="ot">&lt;-</span> mat_sf[train_samples, ]</span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a><span class="co"># match rows</span></span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all.equal</span>(<span class="fu">rownames</span>(mat_psi_train), <span class="fu">rownames</span>(mat_sf_train)))</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a>mat_train <span class="ot">&lt;-</span> <span class="fu">cbind</span>(mat_sf_train, mat_psi_train)</span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a><span class="co"># finish</span></span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a>nb_psi <span class="ot">&lt;-</span> <span class="fu">ncol</span>(mat_psi_train)</span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a>nb_sf <span class="ot">&lt;-</span> <span class="fu">ncol</span>(mat_sf_train)</span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a>mat_test <span class="ot">&lt;-</span> <span class="fu">cbind</span>(mat_sf[test_samples,], mat_psi[test_samples, ])</span>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a>mat_sf_test <span class="ot">&lt;-</span> mat_test[,<span class="dv">1</span><span class="sc">:</span>nb_sf]</span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a>mat_psi_test <span class="ot">&lt;-</span> mat_test[,(nb_sf<span class="sc">+</span><span class="dv">1</span>)<span class="sc">:</span>(nb_sf<span class="sc">+</span>nb_psi)]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="using-direct-inversion" class="level2">
+<h2 class="anchored" data-anchor-id="using-direct-inversion">Using direct inversion</h2>
+<p>If we just want to predict the PSI in the test set from the SF in the test set and a relationship learned from the training set, there is a direct way, calling <span class="math inline">\(P\)</span> the matrix of PSI, <span class="math inline">\(F\)</span> the matrix of SF, and <span class="math inline">\(C\)</span> the relationship:</p>
+<p><span class="math display">\[ {P} = {F} {C} \]</span> <span class="math display">\[ P = F^{-1} C\]</span></p>
+<p>So we can simply estimate <span class="math inline">\(C\)</span> on the training set. One problem is that the SF matrix is typically non invertible (since it’s not square), we use the Moore-Penrose inverse:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>mat_sf_train_inv <span class="ot">&lt;-</span> corpcor<span class="sc">::</span><span class="fu">pseudoinverse</span>(mat_sf_train)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>C <span class="ot">&lt;-</span> mat_sf_train_inv <span class="sc">%*%</span> mat_psi_train</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>est_psi_test <span class="ot">&lt;-</span> mat_sf[test_samples,] <span class="sc">%*%</span> C</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mat_psi_test, est_psi_test,</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"PSI test set (measured)"</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">"Estimated PSI"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>So we get a pretty good prediction, the data does contain learnable structure.</p>
+</section>
+<section id="precision-matrix" class="level2">
+<h2 class="anchored" data-anchor-id="precision-matrix">Precision matrix</h2>
+<p>The approach used previously was, using the training set, estimate the precision matrix, extract the corner <span class="math inline">\(\Omega\)</span> of that matrix that describes relationship between SF and PSI, then use: <span class="math display">\[P_{predicted} = F_{test} \Omega \]</span></p>
+<p>Then we compare <span class="math inline">\(P_{predicted}\)</span> to <span class="math inline">\(P_{test}\)</span>. This does not work, for example we can’t even predict the training set!</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>mim <span class="ot">&lt;-</span> minet<span class="sc">::</span><span class="fu">build.mim</span>(mat_train)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>arac <span class="ot">&lt;-</span> minet<span class="sc">::</span><span class="fu">aracne</span>(mim)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># extract adjacency matrix</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>adj <span class="ot">&lt;-</span> arac[(nb_sf <span class="sc">+</span> <span class="dv">1</span>)<span class="sc">:</span>(nb_sf <span class="sc">+</span> nb_psi), <span class="dv">1</span><span class="sc">:</span>nb_sf]</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># re-predict the training set</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>predicted_psi_train <span class="ot">&lt;-</span> mat_sf_train <span class="sc">%*%</span> <span class="fu">t</span>(adj)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mat_psi_train, predicted_psi_train,</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"PSI in the training test"</span>,</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">"PSI predicted from adjacency"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>So this simplistic formula is wrong.</p>
+</section>
+<section id="approaches-in-the-literature" class="level1">
+<h1>Approaches in the literature</h1>
+<p>It’s unclear to me whether we can get signal from precision matrix (see e.g.&nbsp;<a href="http://ir.hit.edu.cn/~jguo/docs/notes/report-in-princeton-research.pdf">this</a>, to me no one cares or gives guarantees about the values of matrix coefficients, only about their sparsity).</p>
+<p>Looking through the literature, we can see a few (not many) efforts to use Cross-Validation in the context of Precision matrix inference. The older version that is being cited regularly is <a href="https://www.stat.berkeley.edu/~bickel/BL2008-banding.pdf">Bickel and Levina, 2008</a>, “Regularized estimation of large covariance matrices” (note there is another Bickel and Levina 2008), in particular their equation (22) in section 5 (p 211).</p>
+<p>More recently, <a href="https://ieeexplore.ieee.org/document/8755295">Tong <em>et al.</em>, 2019</a> propose two methods that I’ve been trying to adapt, that they call in their paper CV-I and CV-II.</p>
+<section id="bickel-and-levina" class="level2">
+<h2 class="anchored" data-anchor-id="bickel-and-levina">Bickel and Levina</h2>
+<p>They define the risk (loss function) for parameter <span class="math inline">\(k\)</span>:</p>
+<p><span class="math display">\[ R(k) = |\hat{\Sigma}_k - \Sigma |_{(1,1)} \]</span></p>
+<blockquote class="blockquote">
+<p>We propose a resampling scheme to estimate the risk and thus <span class="math inline">\(k_0\)</span> : divide the original sample into two samples at random and use the sample covariance matrix of one sample as the “target” to choose the best k for the other sample. Let <span class="math inline">\(n_1, n_2 = n − n_1\)</span> be the two sample sizes for the random split, and let <span class="math inline">\(\hat{\Sigma}_1^\nu\)</span>, <span class="math inline">\(\hat{\Sigma}_2^\nu\)</span> be the two sample covariance matrices from the νth split, for <span class="math inline">\(ν = 1,... , N\)</span>. Alternatively, N random splits could be replaced by K-fold cross-validation. Then the risk can be estimated by:</p>
+</blockquote>
+<p><span class="math display">\[ \hat{R}(k) = \frac{1}{N} \sum_{\nu=1}^N ||B_k(\hat{\Sigma}_1^{(\nu)}) - \hat{\Sigma}_2^{(\nu)}||_{(1,1)} \tag{24}\]</span></p>
+<p>where <span class="math inline">\(B_k()\)</span> is their regularization method (banding).</p>
+<blockquote class="blockquote">
+<p>It may be surprising that using the sample covariance <span class="math inline">\(\hat{\Sigma}_2\)</span> as the target in (24) works at all, since it is known to be a very noisy estimate of <span class="math inline">\(\Sigma\)</span>. It is, however, an unbiased estimate, and we found that even though (24) tends to overestimate the actual value of the risk, it gives very good results for choosing k.</p>
+</blockquote>
+<p>In other words, they directly compare the covariance matrix inferred from the training to that computed in the test set. I haven’t attempted this method and adapting it to precision matrix inference.</p>
+<p>Here is a quick test:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>mim <span class="ot">&lt;-</span> minet<span class="sc">::</span><span class="fu">build.mim</span>(mat_train)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>arac <span class="ot">&lt;-</span> minet<span class="sc">::</span><span class="fu">aracne</span>(mim)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># our inferred precision matrix</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(arac)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 747 747</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># rebuild the inferred covariance matrix</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>S_train_inferred <span class="ot">&lt;-</span> corpcor<span class="sc">::</span><span class="fu">pseudoinverse</span>(arac)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>S_train_data <span class="ot">&lt;-</span> <span class="fu">cov</span>(mat_train)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co"># subsample for faster plotting</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>srows <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">nrow</span>(S_train_inferred), <span class="dv">100</span>)</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>scols <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">ncol</span>(S_train_inferred), <span class="dv">100</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(S_train_data[srows,scols], S_train_inferred[srows,scols],</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Covariance matrix from the training set"</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">"Inferred covariance matrix from ARACNE"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># same forcing identical axes</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(S_train_data[srows,scols], S_train_inferred[srows,scols],</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"Covariance matrix from the training set"</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">"Inferred covariance matrix from ARACNE"</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylim =</span> <span class="fu">range</span>(S_train_data[srows,scols]))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-5-2.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Doesn’t seem to work extremely well, would need more work.</p>
+</section>
+<section id="the-skggm-methods" class="level2">
+<h2 class="anchored" data-anchor-id="the-skggm-methods">The skggm methods</h2>
+<p>The Python package skggm provides tools for estimating GGMs (similar to QUIC), and has <a href="https://skggm.github.io/skggm/tour">a good overview</a>. Following Bickel and Levina (2008), it offers several CV methods comparing the <span class="math inline">\(\Sigma\)</span> reconstructed from the estimated <span class="math inline">\(\Omega\)</span>, all aim to estimate the loss <span class="math inline">\(d(\hat{\Sigma}^{ts}, \hat{\Omega}^{tr})\)</span>:</p>
+<p><span class="math display">\[ -tr(\hat{\Sigma}^{ts} \cdot \hat{\Omega}^{tr}) + log ~ det \hat{\Omega}^{tr} - p \cdot log 2\pi \tag{log-likelihood} \]</span></p>
+<p><span class="math display">\[ \frac{1}{2}\left( tr(\hat{\Sigma}^{ts} \cdot \hat{\Omega}^{tr}) - log ~ det (\hat{\Sigma}^{ts} \cdot \hat{\Omega}^{tr}) -p \right) \tag{KL-loss}\]</span></p>
+<p><span class="math display">\[ \sum_{ij} \left( \hat{\Sigma}^{ts} - \hat{\Sigma}^{tr}_{smle} \right)^2 \tag{Frobenius}\]</span></p>
+<p><span class="math display">\[ tr(\hat{\Sigma}^{ts} \cdot \hat{\Omega}^{tr} - I_p)^2 \tag{quadratic} \]</span></p>
+<p>Let’s reimplement <a href="https://github.com/skggm/skggm/blob/develop/inverse_covariance/metrics.py">these</a> loss functions (note, using the source Python code as reference, e.g.&nbsp;they take full sum instead of trace):</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>logdet <span class="ot">&lt;-</span> <span class="cf">function</span>(x){</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  dt <span class="ot">&lt;-</span> <span class="fu">determinant</span>(x, <span class="at">logarithm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span>(dt<span class="sc">$</span>sign <span class="sc">!=</span> <span class="dv">1</span>) <span class="fu">return</span>(<span class="sc">-</span><span class="cn">Inf</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  dt<span class="sc">$</span>modulus <span class="sc">|&gt;</span> <span class="fu">as.numeric</span>()</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>loss_loglik <span class="ot">&lt;-</span> <span class="cf">function</span>(Sts, OMtr){</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stopifnot</span>(<span class="fu">all</span>(<span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(OMtr),</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>                <span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">ncol</span>(OMtr),</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>                <span class="fu">ncol</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(Sts)))</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  loglik <span class="ot">&lt;-</span> <span class="sc">-</span><span class="fu">sum</span>(Sts <span class="sc">*</span> OMtr) <span class="sc">+</span> <span class="fu">logdet</span>(OMtr) <span class="sc">-</span> <span class="fu">nrow</span>(Sts)<span class="sc">*</span><span class="fu">log</span>(<span class="dv">2</span><span class="sc">*</span>pi)</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  loglik<span class="sc">/</span><span class="dv">2</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>loss_kl <span class="ot">&lt;-</span> <span class="cf">function</span>(Sts, OMtr){</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stopifnot</span>(<span class="fu">all</span>(<span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(OMtr),</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>                <span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">ncol</span>(OMtr),</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>                <span class="fu">ncol</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(Sts)))</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>  <span class="fl">0.5</span> <span class="sc">*</span> (<span class="fu">sum</span>(Sts <span class="sc">*</span> OMtr) <span class="sc">-</span> <span class="fu">logdet</span>(Sts <span class="sc">%*%</span> OMtr) <span class="sc">-</span> <span class="fu">nrow</span>(Sts))</span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>loss_frob <span class="ot">&lt;-</span> <span class="cf">function</span>(Sts, Str){</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stopifnot</span>(<span class="fu">all</span>(<span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(Str),</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>                <span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">ncol</span>(Str),</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>                <span class="fu">ncol</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(Sts)))</span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">norm</span>(Sts <span class="sc">-</span> Str, <span class="at">type =</span> <span class="st">"F"</span>)</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>loss_quad <span class="ot">&lt;-</span> <span class="cf">function</span>(Sts, OMtr){</span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stopifnot</span>(<span class="fu">all</span>(<span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(OMtr),</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>                <span class="fu">nrow</span>(Sts) <span class="sc">==</span> <span class="fu">ncol</span>(OMtr),</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>                <span class="fu">ncol</span>(Sts) <span class="sc">==</span> <span class="fu">nrow</span>(Sts)))</span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sum</span>(<span class="fu">diag</span>( ( Sts <span class="sc">%*%</span> OMtr <span class="sc">-</span> <span class="fu">diag</span>(<span class="fu">nrow</span>(Sts)) )<span class="sc">^</span><span class="dv">2</span> ))</span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="skggm-cv-on-made-up-signal" class="level2">
+<h2 class="anchored" data-anchor-id="skggm-cv-on-made-up-signal">skggm CV on made-up signal</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># test on made-up signal</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>Y_tib <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">y1 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>),</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">y2 =</span> <span class="dv">2</span><span class="sc">*</span>y1 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">10</span>),</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>                <span class="at">y3 =</span> y1<span class="sc">*</span><span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="fl">0.05</span>),</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>                <span class="at">y4 =</span> y1<span class="sc">/</span>y2<span class="sc">+</span>y3,</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>                <span class="at">y5 =</span> y2<span class="sc">+</span>y3 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> .<span class="dv">01</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale</span>(<span class="at">center =</span> <span class="cn">TRUE</span>, <span class="at">scale =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(Y_tib)</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>Ytr <span class="ot">&lt;-</span> Y[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, ]</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>Yts <span class="ot">&lt;-</span> Y[<span class="dv">11</span><span class="sc">:</span><span class="dv">20</span>, ]</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>Str <span class="ot">&lt;-</span> <span class="fu">cov</span>(Ytr)</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>Sts <span class="ot">&lt;-</span> <span class="fu">cov</span>(Yts)</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>OMtr <span class="ot">&lt;-</span> <span class="fu">solve</span>(Str)</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="co"># randomized</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>Srd <span class="ot">&lt;-</span> Sts</span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>Srd[] <span class="ot">&lt;-</span> <span class="fu">sample</span>(Sts)</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>all_loss <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">cov_mat =</span> <span class="fu">c</span>(<span class="st">"train"</span>, <span class="st">"test"</span>, <span class="st">"random"</span>) <span class="sc">|&gt;</span> <span class="fu">rep</span>(<span class="at">each =</span> <span class="dv">4</span>) <span class="sc">|&gt;</span> <span class="fu">fct_inorder</span>(),</span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>                   <span class="at">loss_function =</span> <span class="fu">c</span>(<span class="st">"loglik"</span>, <span class="st">"kl"</span>, <span class="st">"frob"</span>, <span class="st">"quad"</span>) <span class="sc">|&gt;</span> <span class="fu">rep</span>(<span class="at">times =</span> <span class="dv">3</span>) <span class="sc">|&gt;</span> <span class="fu">fct_inorder</span>(),</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>                   <span class="at">loss =</span> <span class="fu">c</span>(<span class="fu">loss_loglik</span>(Str, OMtr),</span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_kl</span>(Str, OMtr),</span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_frob</span>(Str, Str),</span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_quad</span>(Str, OMtr),</span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_loglik</span>(Sts, OMtr),</span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_kl</span>(Sts, OMtr),</span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_frob</span>(Sts, Str),</span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_quad</span>(Sts, OMtr),</span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_loglik</span>(Srd, OMtr),</span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_kl</span>(Srd, OMtr),</span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_frob</span>(Srd, Str),</span>
+<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_quad</span>(Srd, OMtr)))</span>
+<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>all_loss</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 12 × 3
+   cov_mat loss_function       loss
+   &lt;fct&gt;   &lt;fct&gt;              &lt;dbl&gt;
+ 1 train   loglik         -7.76e+ 0
+ 2 train   kl              8.86e- 9
+ 3 train   frob            0       
+ 4 train   quad            8.88e-16
+ 5 test    loglik         -2.14e+ 1
+ 6 test    kl              1.30e+ 1
+ 7 test    frob            5.88e+ 3
+ 8 test    quad            2.46e+ 8
+ 9 random  loglik         -2.74e+ 8
+10 random  kl            Inf       
+11 random  frob            3.03e+ 4
+12 random  quad            1.86e+17</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>all_loss <span class="sc">|&gt;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_classic</span>() <span class="sc">+</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="fu">aes</span>(<span class="at">x =</span> cov_mat, <span class="at">y =</span> <span class="fu">log10</span>(<span class="dv">1</span><span class="sc">+</span><span class="fu">abs</span>(loss)), <span class="at">fill =</span> loss_function)) <span class="sc">+</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>loss_function, <span class="at">scales =</span> <span class="st">"free_y"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="skggm-cv-on-real-signal" class="level2">
+<h2 class="anchored" data-anchor-id="skggm-cv-on-real-signal">skggm CV on real signal</h2>
+<p>Note also that QUIC, the R package I’ve used previously and that inspired skggm, does return the inverse of <span class="math inline">\(\hat{\Omega}\)</span> (called W), so we can use it directly. We can try and test these approaches:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># arbitrarily chosen regularization parameter</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>r_gg <span class="ot">&lt;-</span> r_gs <span class="ot">&lt;-</span> r_ss <span class="ot">&lt;-</span> .<span class="dv">05</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>regul_mat <span class="ot">&lt;-</span> <span class="fu">rbind</span>(<span class="fu">cbind</span>(<span class="fu">matrix</span>(r_gg, <span class="at">nrow=</span>nb_sf, <span class="at">ncol =</span> nb_sf),</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>                           <span class="fu">matrix</span>(r_gs, <span class="at">nrow=</span>nb_sf, <span class="at">ncol =</span> nb_psi)),</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>                     <span class="fu">cbind</span>(<span class="fu">matrix</span>(r_gs, <span class="at">nrow=</span>nb_psi, <span class="at">ncol =</span> nb_sf),</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>                           <span class="fu">matrix</span>(r_ss, <span class="at">nrow=</span>nb_psi, <span class="at">ncol =</span> nb_psi)))</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>S_train <span class="ot">&lt;-</span> <span class="fu">cov</span>(mat_train)</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>quic <span class="ot">&lt;-</span> QUIC<span class="sc">::</span><span class="fu">QUIC</span>(S_train, <span class="at">rho =</span> regul_mat)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Running QUIC version 1.1 in 'default' mode.
+QUIC CPU time: 38.934 seconds</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># subsample for faster plotting</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>srows <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">nrow</span>(S_train), <span class="dv">100</span>)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>scols <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">ncol</span>(S_train), <span class="dv">100</span>)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(S_train[srows, scols], quic<span class="sc">$</span>W[srows, scols],</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">"covariance matrix train set"</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">"Inverse of inferred precision matrix"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>And if we try and compare to the covariance matrix on the test set, using the quadratic loss defined above:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>mat_test_imp <span class="ot">&lt;-</span> impute<span class="sc">::</span><span class="fu">impute.knn</span>(mat_test)<span class="sc">$</span>data</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>S_test <span class="ot">&lt;-</span> <span class="fu">cov</span>(mat_test_imp)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co"># randomized</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>S_rand <span class="ot">&lt;-</span> S_test</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>S_rand[] <span class="ot">&lt;-</span> <span class="fu">sample</span>(S_rand)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>pseudoinv <span class="ot">&lt;-</span> corpcor<span class="sc">::</span><span class="fu">pseudoinverse</span>(S_train)</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>all_loss <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">cov_mat =</span> <span class="fu">c</span>(<span class="st">"train-ownPseudoInv"</span>, <span class="st">"train-quic"</span>, <span class="st">"test-quic"</span>, <span class="st">"rand-quic"</span>) <span class="sc">|&gt;</span> <span class="fu">rep</span>(<span class="at">each =</span> <span class="dv">4</span>) <span class="sc">|&gt;</span> <span class="fu">fct_inorder</span>(),</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>                   <span class="at">loss_function =</span> <span class="fu">c</span>(<span class="st">"loglik"</span>, <span class="st">"kl"</span>, <span class="st">"frob"</span>, <span class="st">"quad"</span>) <span class="sc">|&gt;</span> <span class="fu">rep</span>(<span class="at">times =</span> <span class="dv">4</span>) <span class="sc">|&gt;</span> <span class="fu">fct_inorder</span>(),</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>                   <span class="at">loss =</span> <span class="fu">c</span>(<span class="fu">loss_loglik</span>(S_train, pseudoinv),</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_kl</span>(S_train, pseudoinv),</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_frob</span>(S_train, corpcor<span class="sc">::</span><span class="fu">pseudoinverse</span>(pseudoinv)),</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_quad</span>(S_train, pseudoinv),</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>                            </span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_loglik</span>(S_train, quic<span class="sc">$</span>X),</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_kl</span>(S_train, quic<span class="sc">$</span>X),</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_frob</span>(S_train, quic<span class="sc">$</span>W),</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_quad</span>(S_train, quic<span class="sc">$</span>X),</span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>                            </span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_loglik</span>(S_test, quic<span class="sc">$</span>X),</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_kl</span>(S_test, quic<span class="sc">$</span>X),</span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_frob</span>(S_test, quic<span class="sc">$</span>W),</span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_quad</span>(S_test, quic<span class="sc">$</span>X),</span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>                            </span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_loglik</span>(S_rand, quic<span class="sc">$</span>X),</span>
+<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_kl</span>(S_rand, quic<span class="sc">$</span>X),</span>
+<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_frob</span>(S_rand, quic<span class="sc">$</span>W),</span>
+<span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">loss_quad</span>(S_rand, quic<span class="sc">$</span>X)))</span>
+<span id="cb15-32"><a href="#cb15-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-33"><a href="#cb15-33" aria-hidden="true" tabindex="-1"></a>all_loss</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 16 × 3
+   cov_mat            loss_function        loss
+   &lt;fct&gt;              &lt;fct&gt;               &lt;dbl&gt;
+ 1 train-ownPseudoInv loglik        -Inf       
+ 2 train-ownPseudoInv kl               1.12e+ 4
+ 3 train-ownPseudoInv frob             8.79e-12
+ 4 train-ownPseudoInv quad             5.62e+ 2
+ 5 train-quic         loglik          -2.26e+ 2
+ 6 train-quic         kl             Inf       
+ 7 train-quic         frob             1.71e+ 1
+ 8 train-quic         quad             2.87e+ 2
+ 9 test-quic          loglik          -3.32e+ 2
+10 test-quic          kl             Inf       
+11 test-quic          frob             4.87e+ 1
+12 test-quic          quad             2.44e+ 2
+13 rand-quic          loglik          -1.27e+ 2
+14 rand-quic          kl             Inf       
+15 rand-quic          frob             9.72e+ 1
+16 rand-quic          quad             1.11e+ 3</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>all_loss <span class="sc">|&gt;</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_classic</span>() <span class="sc">+</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="fu">aes</span>(<span class="at">x =</span> cov_mat, <span class="at">y =</span> loss, <span class="at">fill =</span> loss_function)) <span class="sc">+</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>loss_function, <span class="at">scales =</span> <span class="st">"free_y"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Removed 1 rows containing missing values (`geom_col()`).</code></pre>
+</div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="tong-et-al.-notations" class="level1">
+<h1>Tong et al.&nbsp;notations</h1>
+<blockquote class="blockquote">
+<p>Consider an N -dimensional signal y with mean zero, covariance matrix <span class="math inline">\(Σ\)</span> and precision matrix <span class="math inline">\(Ω≜Σ−1\)</span> . Suppose we have <span class="math inline">\(T\)</span> independent and identically distributed training samples and let <span class="math inline">\(y_t\)</span> be the <span class="math inline">\(t\)</span>-th sample. The SCM is computed as</p>
+</blockquote>
+<p><span class="math display">\[ \widehat {\boldsymbol \Sigma } = \frac {1}{T} \sum _{t=1}^{T} \mathbf y_{t} \mathbf y_{t}^\dagger \tag{1}\]</span></p>
+<p>so they take the matrix with N rows corresponding to the N signal components, and T columns corresponding to samples in space and/or time.</p>
+<p>In section B, they assume an auto-regressive model, which I think is only used for simulations within that section. For here, I use an artificial signal, with row mean at 0:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>(<span class="fu">library</span>(tidyverse))</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="co"># create some data</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>Y_tib <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">y1 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>),</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>                <span class="at">y2 =</span> <span class="dv">2</span><span class="sc">*</span>y1 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">10</span>),</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>                <span class="at">y3 =</span> y1<span class="sc">*</span><span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="fl">0.05</span>),</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>                <span class="at">y4 =</span> y1<span class="sc">/</span>y2<span class="sc">+</span>y3,</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>                <span class="at">y5 =</span> y2<span class="sc">+</span>y3 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> .<span class="dv">01</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale</span>(<span class="at">center =</span> <span class="cn">TRUE</span>, <span class="at">scale =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">t</span>(<span class="fu">as.matrix</span>(Y_tib))</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>T <span class="ot">&lt;-</span> <span class="fu">ncol</span>(Y)</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>N <span class="ot">&lt;-</span> <span class="fu">nrow</span>(Y)</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(Y)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1]  5 20</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># first few columns</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>Y[, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          [,1]       [,2]        [,3]       [,4]
+y1 -40.8488843 -0.3440276  -51.307624  70.237846
+y2 -72.4432798  7.1980230 -101.804884 120.646891
+y3  -0.3311812 -0.7051678   -2.044854   1.631238
+y4  -0.2233240 -0.8326118   -2.018452   1.724372
+y5 -72.7514622  6.4914455 -103.843857 122.277391</code></pre>
+</div>
+</div>
+<p>We can recompute <span class="math inline">\(\Sigma\)</span> with the same definition as them (eq 1):</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>Spart <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  Spart[[t]] <span class="ot">&lt;-</span> Y[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Y[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>S <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>S</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           y1         y2         y3         y4         y5
+y1 1980.82685 3879.43053 -15.218482 -14.890729 3864.14263
+y2 3879.43053 7666.54607 -35.294628 -34.846437 7631.12807
+y3  -15.21848  -35.29463   3.554022   3.593051  -31.74609
+y4  -14.89073  -34.84644   3.593051   3.644750  -31.25854
+y5 3864.14263 7631.12807 -31.746094 -31.258538 7599.25322</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># similar result as R's built-in</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="fu">all.equal</span>(S,</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>          <span class="fu">cov</span>(Y_tib)<span class="sc">*</span>(T<span class="dv">-1</span>)<span class="sc">/</span>T)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] TRUE</code></pre>
+</div>
+</div>
+<section id="tong-et-al.-cv-i" class="level2">
+<h2 class="anchored" data-anchor-id="tong-et-al.-cv-i">Tong et al.&nbsp;CV-I</h2>
+<blockquote class="blockquote">
+<p>First, we partition the entries into two subsets:</p>
+</blockquote>
+<p><span class="math display">\[ \mathbf y = \left [{ \begin{array}{c} \mathbf y^{(1) } \\ \mathbf y^{(2) } \end{array} }\right] \tag{8} \]</span></p>
+<blockquote class="blockquote">
+<p>where the lengths of <span class="math inline">\(y^{(1)}\)</span> and <span class="math inline">\(y^{(2)}\)</span> are <span class="math inline">\(N_1\)</span> and <span class="math inline">\(N_2\)</span> , respectively. Accordingly, let us partition the covariance matrice of y as</p>
+</blockquote>
+<p><span class="math display">\[\boldsymbol \Sigma = \left [{ \begin{array}{cc} \boldsymbol \Sigma _{11} &amp;\quad \boldsymbol \Sigma _{12} \\ \boldsymbol \Sigma _{21} &amp;\quad \boldsymbol \Sigma _{22} \\ \end{array} }\right],\tag{9} \]</span></p>
+<p>We can use such a partitioning:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>N1 <span class="ot">&lt;-</span> <span class="dv">3</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>N2 <span class="ot">&lt;-</span> <span class="dv">2</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>Yp1 <span class="ot">&lt;-</span> Y[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>,]</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>Yp2 <span class="ot">&lt;-</span> Y[<span class="dv">4</span><span class="sc">:</span><span class="dv">5</span>,]</span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>Yp1[,<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          [,1]       [,2]        [,3]       [,4]
+y1 -40.8488843 -0.3440276  -51.307624  70.237846
+y2 -72.4432798  7.1980230 -101.804884 120.646891
+y3  -0.3311812 -0.7051678   -2.044854   1.631238</code></pre>
+</div>
+</div>
+<p>And we can recompute each of the components in eq (9):</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Partial covariance matrices</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>Spart11 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  Spart11[[t]] <span class="ot">&lt;-</span> Yp1[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp1[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>S11 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart11, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>Spart22 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>  Spart22[[t]] <span class="ot">&lt;-</span> Yp2[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp2[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>S22 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart22, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>Spart12 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>  Spart12[[t]] <span class="ot">&lt;-</span> Yp1[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp2[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>S12 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart12, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a>Spart21 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a>  Spart21[[t]] <span class="ot">&lt;-</span> Yp2[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp1[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb29-23"><a href="#cb29-23" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb29-24"><a href="#cb29-24" aria-hidden="true" tabindex="-1"></a>S21 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart21, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb29-25"><a href="#cb29-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-26"><a href="#cb29-26" aria-hidden="true" tabindex="-1"></a>S11</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           y1         y2         y3
+y1 1980.82685 3879.43053 -15.218482
+y2 3879.43053 7666.54607 -35.294628
+y3  -15.21848  -35.29463   3.554022</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>S12</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           y4         y5
+y1 -14.890729 3864.14263
+y2 -34.846437 7631.12807
+y3   3.593051  -31.74609</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>S21</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           y1         y2         y3
+y4  -14.89073  -34.84644   3.593051
+y5 3864.14263 7631.12807 -31.746094</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>S22</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          y4         y5
+y4   3.64475  -31.25854
+y5 -31.25854 7599.25322</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>S</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           y1         y2         y3         y4         y5
+y1 1980.82685 3879.43053 -15.218482 -14.890729 3864.14263
+y2 3879.43053 7666.54607 -35.294628 -34.846437 7631.12807
+y3  -15.21848  -35.29463   3.554022   3.593051  -31.74609
+y4  -14.89073  -34.84644   3.593051   3.644750  -31.25854
+y5 3864.14263 7631.12807 -31.746094 -31.258538 7599.25322</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rbind</span>(</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cbind</span>(S11, S12),</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cbind</span>(S21, S22)</span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">all.equal</span>(S)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] TRUE</code></pre>
+</div>
+</div>
+<p>Then they also define the precision matrix in components:</p>
+<p><span class="math display">\[ \boldsymbol \Omega \triangleq \boldsymbol \Sigma ^{-1} = \left [{ \begin{array}{cc} \boldsymbol \Omega _{11} &amp;\quad \boldsymbol \Omega _{12} \\ \boldsymbol \Omega _{21} &amp;\quad \boldsymbol \Omega _{22} \\ \end{array} }\right] \tag{10} \]</span></p>
+<blockquote class="blockquote">
+<p>From the matrix inversion lemma, it can be shown that</p>
+</blockquote>
+<p><span class="math display">\[ \boldsymbol \Omega _{21}= -\boldsymbol \Sigma _{22}^{-1}\boldsymbol \Sigma _{21} (\boldsymbol \Sigma _{11} - \boldsymbol \Sigma _{12} \boldsymbol \Sigma _{22}^{-1} \boldsymbol \Sigma _{21})^{-1} \tag{11} \]</span> <span class="math display">\[ \boldsymbol \Omega _{11}= (\boldsymbol \Sigma _{11} - \boldsymbol \Sigma _{12} \boldsymbol \Sigma _{22}^{-1} \boldsymbol \Sigma _{21})^{-1} \tag{12} \]</span></p>
+<p>We can check that taking the exact inverse of <span class="math inline">\(\Sigma\)</span> to get <span class="math inline">\(\Omega\)</span>, or recomputing the components of <span class="math inline">\(\Omega\)</span> using eq 11 and 12 do give the same result:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>OM <span class="ot">&lt;-</span> <span class="fu">solve</span>(S)</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>OM21 <span class="ot">&lt;-</span> <span class="sc">-</span><span class="fu">solve</span>(S22) <span class="sc">%*%</span> S21 <span class="sc">%*%</span> <span class="fu">solve</span>(S11 <span class="sc">-</span> S12 <span class="sc">%*%</span> <span class="fu">solve</span>(S22) <span class="sc">%*%</span> S21)</span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>OM11 <span class="ot">&lt;-</span> <span class="fu">solve</span>(S11 <span class="sc">-</span> S12 <span class="sc">%*%</span> <span class="fu">solve</span>(S22) <span class="sc">%*%</span> S21)</span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>OM</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>            y1            y2           y3           y4            y5
+y1  0.06653668     -4.008018     -3.49857   -0.5141868      3.974265
+y2 -4.00801759  13115.829117  12615.09982  473.0320096 -13114.159355
+y3 -3.49857033  12615.099818  12220.03967  369.6404738 -12613.664473
+y4 -0.51418684    473.032010    369.64047  101.4792132   -472.793065
+y5  3.97426547 -13114.159355 -12613.66447 -472.7930648  13112.506863</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>OM21</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           y1         y2          y3
+y4 -0.5141868    473.032    369.6405
+y5  3.9742654 -13114.159 -12613.6643</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>OM11</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>            y1           y2          y3
+y1  0.06653668    -4.008018    -3.49857
+y2 -4.00801752 13115.828899 12615.09961
+y3 -3.49857027 12615.099608 12220.03947</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rbind</span>(</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cbind</span>(OM11, <span class="fu">t</span>(OM21)),</span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cbind</span>(OM21, <span class="fu">matrix</span>(<span class="dv">0</span>,<span class="fu">nrow</span>(OM21),<span class="fu">nrow</span>(OM21)))</span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>  (\(.x) <span class="fu">abs</span>(.x <span class="sc">-</span> OM) <span class="sc">&lt;=</span> <span class="fl">1e-3</span>)()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>     y1   y2   y3    y4    y5
+y1 TRUE TRUE TRUE  TRUE  TRUE
+y2 TRUE TRUE TRUE  TRUE  TRUE
+y3 TRUE TRUE TRUE  TRUE  TRUE
+y4 TRUE TRUE TRUE FALSE FALSE
+y5 TRUE TRUE TRUE FALSE FALSE</code></pre>
+</div>
+</div>
+<blockquote class="blockquote">
+<p>Therefore, from the submatrices <span class="math inline">\(Ω_{11}\)</span> and <span class="math inline">\(Ω_{21}\)</span> of the precision matrix <span class="math inline">\(Ω\)</span>, we can construct an <span class="math inline">\(N_2×N_1\)</span> matrix</p>
+</blockquote>
+<p><span class="math display">\[ \mathbf W \triangleq - \boldsymbol \Omega _{21} \boldsymbol \Omega _{11}^{-1} = \boldsymbol \Sigma _{22}^{-1}\boldsymbol \Sigma _{21} \tag{13} \]</span></p>
+<p>we can compute <span class="math inline">\(W\)</span> and check that the two formulations are equivalent:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>W <span class="ot">&lt;-</span> <span class="sc">-</span> OM21 <span class="sc">%*%</span> <span class="fu">solve</span>(OM11)</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>W_alternative <span class="ot">&lt;-</span> <span class="fu">solve</span>(S22) <span class="sc">%*%</span> S21</span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a><span class="fu">all.equal</span>(W, W_alternative)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] TRUE</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>W</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          y1         y2            y3
+y4 0.2855147 -0.9831105  0.9847263605
+y5 0.5096642  1.0001506 -0.0001269845</code></pre>
+</div>
+</div>
+<blockquote class="blockquote">
+<p>It can be easily seen that <span class="math inline">\(W\)</span> is the matrix of coefficients for regressing <span class="math inline">\(y^{(1)}\)</span> on <span class="math inline">\(y^{(2)}\)</span> and is the linear minimum mean squared error (LMMSE) estimator for estimating <span class="math inline">\(y^{(1)}\)</span> from <span class="math inline">\(y^{(2)}\)</span> .</p>
+<p>The above interpretation links the precision matrix to regression analysis of the data. This has been exploited for deriving regularized precision matrix estimates [25]. […] In this work, we exploit the above regression interpretation for another purpose, i.e., for determining the bandwidth for the regularized precision matrix estimation. The rationale is that, if we have a better estimate <span class="math inline">\(\hat{\Omega}\)</span> of the true precision matrix <span class="math inline">\(Ω\)</span> , then from it a linear predictor constructed as (13) (with <span class="math inline">\(Ω\)</span> replaced by <span class="math inline">\(\hat{Ω}\)</span>) should lead to a smaller error <span class="math inline">\(ξ_1\)</span> of predicting <span class="math inline">\(y^{(1)}\)</span> from <span class="math inline">\(y^{(2)}\)</span> , where</p>
+</blockquote>
+<p><span class="math display">\[ \boldsymbol \xi _{1} \triangleq \mathbf y^{(1) } - \mathbf W^\dagger \mathbf y^{(2) } \tag{14} \]</span></p>
+<blockquote class="blockquote">
+<p>is obtainable from the training data and the estimate <span class="math inline">\(\hat{\Omega}\)</span> of the precision matrix.</p>
+</blockquote>
+<p>So from my reading, <span class="math inline">\(W\)</span> is a matrix that transforms <span class="math inline">\(y^{(2)}\)</span> into <span class="math inline">\(y^{(1)}\)</span>:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>estimated_Yp1 <span class="ot">&lt;-</span> <span class="fu">t</span>(W) <span class="sc">%*%</span> Yp2</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mar =</span> <span class="fu">c</span>(<span class="dv">5</span>,<span class="dv">5</span>,<span class="dv">4</span>,<span class="dv">2</span>))</span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(Yp1, estimated_Yp1,</span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="fu">expression</span>(<span class="st">"True "</span><span class="sc">*</span><span class="fu">bold</span>(y)<span class="sc">^</span><span class="st">"(1)"</span><span class="sc">*</span><span class="st">"(from simulation)"</span>),</span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="fu">expression</span>(<span class="st">"Estimated "</span><span class="sc">*</span><span class="fu">bold</span>(y)<span class="sc">^</span><span class="st">"(1)"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-16-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Important note (and this was my initial mistake) that this only works for a signal that contains structure! Here, same code changing just the initial matrix:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(<span class="at">list =</span> <span class="fu">ls</span>())</span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>(<span class="fu">library</span>(tidyverse))</span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a><span class="co"># create some fully random data</span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a>Y_tib <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">y1 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>),</span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a>                <span class="at">y2 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>),</span>
+<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a>                <span class="at">y3 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>),</span>
+<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a>                <span class="at">y4 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>),</span>
+<span id="cb54-10"><a href="#cb54-10" aria-hidden="true" tabindex="-1"></a>                <span class="at">y5 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb54-11"><a href="#cb54-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale</span>(<span class="at">center =</span> <span class="cn">TRUE</span>, <span class="at">scale =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb54-12"><a href="#cb54-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-13"><a href="#cb54-13" aria-hidden="true" tabindex="-1"></a><span class="co"># the rest is as above</span></span>
+<span id="cb54-14"><a href="#cb54-14" aria-hidden="true" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">t</span>(<span class="fu">as.matrix</span>(Y_tib))</span>
+<span id="cb54-15"><a href="#cb54-15" aria-hidden="true" tabindex="-1"></a>T <span class="ot">&lt;-</span> <span class="fu">ncol</span>(Y)</span>
+<span id="cb54-16"><a href="#cb54-16" aria-hidden="true" tabindex="-1"></a>N <span class="ot">&lt;-</span> <span class="fu">nrow</span>(Y)</span>
+<span id="cb54-17"><a href="#cb54-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-18"><a href="#cb54-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Covariance matrix ----</span></span>
+<span id="cb54-19"><a href="#cb54-19" aria-hidden="true" tabindex="-1"></a>Spart <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb54-20"><a href="#cb54-20" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb54-21"><a href="#cb54-21" aria-hidden="true" tabindex="-1"></a>  Spart[[t]] <span class="ot">&lt;-</span> Y[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Y[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb54-22"><a href="#cb54-22" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb54-23"><a href="#cb54-23" aria-hidden="true" tabindex="-1"></a>S <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb54-24"><a href="#cb54-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-25"><a href="#cb54-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-26"><a href="#cb54-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-27"><a href="#cb54-27" aria-hidden="true" tabindex="-1"></a>Yp1 <span class="ot">&lt;-</span> Y[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>,]</span>
+<span id="cb54-28"><a href="#cb54-28" aria-hidden="true" tabindex="-1"></a>Yp2 <span class="ot">&lt;-</span> Y[<span class="dv">4</span><span class="sc">:</span><span class="dv">5</span>,]</span>
+<span id="cb54-29"><a href="#cb54-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-30"><a href="#cb54-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-31"><a href="#cb54-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-32"><a href="#cb54-32" aria-hidden="true" tabindex="-1"></a><span class="co"># Partial covariance matrices</span></span>
+<span id="cb54-33"><a href="#cb54-33" aria-hidden="true" tabindex="-1"></a>Spart11 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb54-34"><a href="#cb54-34" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb54-35"><a href="#cb54-35" aria-hidden="true" tabindex="-1"></a>  Spart11[[t]] <span class="ot">&lt;-</span> Yp1[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp1[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb54-36"><a href="#cb54-36" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb54-37"><a href="#cb54-37" aria-hidden="true" tabindex="-1"></a>S11 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart11, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb54-38"><a href="#cb54-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-39"><a href="#cb54-39" aria-hidden="true" tabindex="-1"></a>Spart22 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb54-40"><a href="#cb54-40" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb54-41"><a href="#cb54-41" aria-hidden="true" tabindex="-1"></a>  Spart22[[t]] <span class="ot">&lt;-</span> Yp2[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp2[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb54-42"><a href="#cb54-42" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb54-43"><a href="#cb54-43" aria-hidden="true" tabindex="-1"></a>S22 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart22, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb54-44"><a href="#cb54-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-45"><a href="#cb54-45" aria-hidden="true" tabindex="-1"></a>Spart12 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb54-46"><a href="#cb54-46" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb54-47"><a href="#cb54-47" aria-hidden="true" tabindex="-1"></a>  Spart12[[t]] <span class="ot">&lt;-</span> Yp1[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp2[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb54-48"><a href="#cb54-48" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb54-49"><a href="#cb54-49" aria-hidden="true" tabindex="-1"></a>S12 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart12, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb54-50"><a href="#cb54-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-51"><a href="#cb54-51" aria-hidden="true" tabindex="-1"></a>Spart21 <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb54-52"><a href="#cb54-52" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb54-53"><a href="#cb54-53" aria-hidden="true" tabindex="-1"></a>  Spart21[[t]] <span class="ot">&lt;-</span> Yp2[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Yp1[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb54-54"><a href="#cb54-54" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb54-55"><a href="#cb54-55" aria-hidden="true" tabindex="-1"></a>S21 <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart21, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb54-56"><a href="#cb54-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-57"><a href="#cb54-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-58"><a href="#cb54-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-59"><a href="#cb54-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-60"><a href="#cb54-60" aria-hidden="true" tabindex="-1"></a>OM <span class="ot">&lt;-</span> <span class="fu">solve</span>(S)</span>
+<span id="cb54-61"><a href="#cb54-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-62"><a href="#cb54-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-63"><a href="#cb54-63" aria-hidden="true" tabindex="-1"></a>OM21 <span class="ot">&lt;-</span> <span class="sc">-</span><span class="fu">solve</span>(S22) <span class="sc">%*%</span> S21 <span class="sc">%*%</span> <span class="fu">solve</span>(S11 <span class="sc">-</span> S12 <span class="sc">%*%</span> <span class="fu">solve</span>(S22) <span class="sc">%*%</span> S21)</span>
+<span id="cb54-64"><a href="#cb54-64" aria-hidden="true" tabindex="-1"></a>OM11 <span class="ot">&lt;-</span> <span class="fu">solve</span>(S11 <span class="sc">-</span> S12 <span class="sc">%*%</span> <span class="fu">solve</span>(S22) <span class="sc">%*%</span> S21)</span>
+<span id="cb54-65"><a href="#cb54-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-66"><a href="#cb54-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-67"><a href="#cb54-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-68"><a href="#cb54-68" aria-hidden="true" tabindex="-1"></a>W <span class="ot">&lt;-</span> <span class="sc">-</span> OM21 <span class="sc">%*%</span> <span class="fu">solve</span>(OM11)</span>
+<span id="cb54-69"><a href="#cb54-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-70"><a href="#cb54-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-71"><a href="#cb54-71" aria-hidden="true" tabindex="-1"></a>estimated_Yp1 <span class="ot">&lt;-</span> <span class="fu">t</span>(W) <span class="sc">%*%</span> Yp2</span>
+<span id="cb54-72"><a href="#cb54-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-73"><a href="#cb54-73" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mar =</span> <span class="fu">c</span>(<span class="dv">5</span>,<span class="dv">5</span>,<span class="dv">4</span>,<span class="dv">2</span>))</span>
+<span id="cb54-74"><a href="#cb54-74" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(Yp1, estimated_Yp1,</span>
+<span id="cb54-75"><a href="#cb54-75" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="fu">expression</span>(<span class="st">"True "</span><span class="sc">*</span><span class="fu">bold</span>(y)<span class="sc">^</span><span class="st">"(1)"</span><span class="sc">*</span><span class="st">"(from simulation)"</span>),</span>
+<span id="cb54-76"><a href="#cb54-76" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="fu">expression</span>(<span class="st">"Estimated "</span><span class="sc">*</span><span class="fu">bold</span>(y)<span class="sc">^</span><span class="st">"(1)"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="tong-et-al.-cv-ii" class="level2">
+<h2 class="anchored" data-anchor-id="tong-et-al.-cv-ii">Tong et al., CV-II</h2>
+<p>In the same paper, they propose another approach to CV.</p>
+<blockquote class="blockquote">
+<p>The second type of regression-based CV scheme (CV-II) uses the modified Cholesky factor of the precision matrix as described below. For an arbitrary positive-definite precision matrix <span class="math inline">\(Ω\)</span>, the modified Cholesky factorization can be written as <span class="math display">\[ \boldsymbol \Omega = \mathbf T^\dagger \mathbf D^{-1} \mathbf T \tag{26} \]</span></p>
+</blockquote>
+<blockquote class="blockquote">
+<p>where <span class="math inline">\(D\)</span> is a diagonal matrix with positive diagonal entries, the modified Cholesky factor <span class="math inline">\(T\)</span> is a lower triangular matrix with unit diagonal entries as follows <span class="math display">\[ \mathbf T = \left [{ \begin{array}{ccccc} 1 &amp;\quad &amp;\quad &amp;&amp; \\ -\phi _{21} &amp;\quad 1 &amp;\quad &amp;\quad &amp;\quad \\ -\phi _{31} &amp;\quad -\phi _{32} &amp;\quad 1 &amp;\quad &amp;\quad \\ \vdots &amp;\quad \vdots &amp;\quad \ddots &amp;\quad \ddots &amp;\quad \\ -\phi _{N1} &amp;\quad -\phi _{N2} &amp;\quad \cdots &amp;\quad -\phi _{N,N-1} &amp;\quad 1 \end{array} }\right] \tag{27} \]</span></p>
+</blockquote>
+<blockquote class="blockquote">
+<p>The coefficients <span class="math inline">\({\phi_{nm}}\)</span> have a regression interpretation [29], [25]: The LMMSE estimate of the <span class="math inline">\(n\)</span>-th entry <span class="math inline">\(y^{(n)}\)</span> of the signal y from its precedents <span class="math inline">\(y^{(1)},y^{(2)},⋯,y^{(n−1)}\)</span> in <span class="math inline">\(y\)</span> can be computed as <span class="math display">\[ \widehat {y}^{(n)} = \sum _{m=1}^{n-1} \phi _{n,m} y^{(m)}, \quad n=2, 3, \cdots, N \tag{28} \]</span></p>
+</blockquote>
+<blockquote class="blockquote">
+<p>Furthermore, the mean squared error (MSE) of this estimator is equal to the <span class="math inline">\(n\)</span>-th diagonal entry of <span class="math inline">\(D\)</span> , i.e., <span class="math display">\[ { \mathbf D}_{n, n} =\mathrm {E}[|y^{(n)} - \widehat {y}^{(n)} |^{2}], \quad n=1, 2, \cdots, N \tag{29} \]</span> where we defined <span class="math inline">\(y^{(1)}=0\)</span> .</p>
+</blockquote>
+<p>So, I can try using the same type of simulated signal as above:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(<span class="at">list =</span> <span class="fu">ls</span>())</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="fu">suppressPackageStartupMessages</span>(<span class="fu">library</span>(tidyverse))</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a><span class="co"># create some data</span></span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>Y_tib <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">y1 =</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">50</span>),</span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>                <span class="at">y2 =</span> <span class="dv">2</span><span class="sc">*</span>y1 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="dv">10</span>),</span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>                <span class="at">y3 =</span> y1<span class="sc">*</span><span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> <span class="fl">0.05</span>),</span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>                <span class="at">y4 =</span> y1<span class="sc">/</span>y2<span class="sc">+</span>y3,</span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a>                <span class="at">y5 =</span> y2<span class="sc">+</span>y3 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">20</span>, <span class="at">sd =</span> .<span class="dv">01</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale</span>(<span class="at">center =</span> <span class="cn">TRUE</span>, <span class="at">scale =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb55-11"><a href="#cb55-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-12"><a href="#cb55-12" aria-hidden="true" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">t</span>(<span class="fu">as.matrix</span>(Y_tib))</span>
+<span id="cb55-13"><a href="#cb55-13" aria-hidden="true" tabindex="-1"></a>T <span class="ot">&lt;-</span> <span class="fu">ncol</span>(Y)</span>
+<span id="cb55-14"><a href="#cb55-14" aria-hidden="true" tabindex="-1"></a>N <span class="ot">&lt;-</span> <span class="fu">nrow</span>(Y)</span>
+<span id="cb55-15"><a href="#cb55-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-16"><a href="#cb55-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-17"><a href="#cb55-17" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(Y)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1]  5 20</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="co"># first few columns</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>Y[, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          [,1]       [,2]        [,3]       [,4]
+y1 -40.8488843 -0.3440276  -51.307624  70.237846
+y2 -72.4432798  7.1980230 -101.804884 120.646891
+y3  -0.3311812 -0.7051678   -2.044854   1.631238
+y4  -0.2233240 -0.8326118   -2.018452   1.724372
+y5 -72.7514622  6.4914455 -103.843857 122.277391</code></pre>
+</div>
+</div>
+<p>We need to estimate <span class="math inline">\(T\)</span> and <span class="math inline">\(D\)</span>, with the help of <a href="https://en.wikipedia.org/wiki/Cholesky_decomposition#LDL_decomposition">Wikipedia</a> and <a href="https://math.stackexchange.com/questions/4752822/equivalence-of-the-ldl-decomposition-with-an-upper-triangular-or-lower-triangula/4752910">a helpful Stack Overflow answer</a>, I could write this function (that uses the R built-in Cholesky decomposition):</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>perdiag <span class="ot">&lt;-</span> <span class="cf">function</span>(nrow){</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>  K <span class="ot">&lt;-</span> <span class="fu">matrix</span>(0L, <span class="at">nrow =</span> nrow, <span class="at">ncol =</span> nrow)</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span>(i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>nrow){</span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>    K[i,(nrow<span class="sc">-</span>i<span class="sc">+</span><span class="dv">1</span>)] <span class="ot">&lt;-</span> 1L</span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>  K</span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>modif_chol <span class="ot">&lt;-</span> <span class="cf">function</span>(M){</span>
+<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>  K <span class="ot">&lt;-</span> <span class="fu">perdiag</span>(<span class="fu">nrow</span>(M))</span>
+<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>  C <span class="ot">&lt;-</span>  <span class="fu">t</span>(<span class="fu">chol</span>(K <span class="sc">%*%</span> M <span class="sc">%*%</span> K))</span>
+<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stopifnot</span>(<span class="fu">all.equal</span>(K <span class="sc">%*%</span> M <span class="sc">%*%</span> K,</span>
+<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a>                      C <span class="sc">%*%</span> <span class="fu">t</span>(C)))</span>
+<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a>  S <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>,<span class="fu">nrow</span>(M),<span class="fu">ncol</span>(M)); <span class="fu">diag</span>(S) <span class="ot">&lt;-</span> <span class="fu">diag</span>(C)</span>
+<span id="cb59-17"><a href="#cb59-17" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb59-18"><a href="#cb59-18" aria-hidden="true" tabindex="-1"></a>  L <span class="ot">&lt;-</span> C <span class="sc">%*%</span> <span class="fu">solve</span>(S)</span>
+<span id="cb59-19"><a href="#cb59-19" aria-hidden="true" tabindex="-1"></a>  D0 <span class="ot">&lt;-</span> S<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb59-20"><a href="#cb59-20" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb59-21"><a href="#cb59-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stopifnot</span>(<span class="fu">all.equal</span>(K <span class="sc">%*%</span> M <span class="sc">%*%</span> K,</span>
+<span id="cb59-22"><a href="#cb59-22" aria-hidden="true" tabindex="-1"></a>                      L <span class="sc">%*%</span> D0 <span class="sc">%*%</span> <span class="fu">t</span>(L)))</span>
+<span id="cb59-23"><a href="#cb59-23" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb59-24"><a href="#cb59-24" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb59-25"><a href="#cb59-25" aria-hidden="true" tabindex="-1"></a>  <span class="co"># get to the same form as paper</span></span>
+<span id="cb59-26"><a href="#cb59-26" aria-hidden="true" tabindex="-1"></a>  T <span class="ot">&lt;-</span> <span class="fu">t</span>(K <span class="sc">%*%</span> L <span class="sc">%*%</span> K)</span>
+<span id="cb59-27"><a href="#cb59-27" aria-hidden="true" tabindex="-1"></a>  D <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>,<span class="fu">nrow</span>(D0),<span class="fu">ncol</span>(D0)); <span class="fu">diag</span>(D) <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">/</span><span class="fu">rev</span>(<span class="fu">diag</span>(D0))</span>
+<span id="cb59-28"><a href="#cb59-28" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb59-29"><a href="#cb59-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stopifnot</span>(<span class="fu">all.equal</span>(M,</span>
+<span id="cb59-30"><a href="#cb59-30" aria-hidden="true" tabindex="-1"></a>                      <span class="fu">t</span>(T) <span class="sc">%*%</span> <span class="fu">solve</span>(D) <span class="sc">%*%</span> T,</span>
+<span id="cb59-31"><a href="#cb59-31" aria-hidden="true" tabindex="-1"></a>                      <span class="at">check.attributes =</span> <span class="cn">FALSE</span>))</span>
+<span id="cb59-32"><a href="#cb59-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">T =</span> T, <span class="at">D =</span> D)</span>
+<span id="cb59-33"><a href="#cb59-33" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>We can proceed as previously, compute <span class="math inline">\(\Sigma\)</span>, take its inverse <span class="math inline">\(\Omega\)</span>, decompose it into <span class="math inline">\(T\)</span> and <span class="math inline">\(D\)</span>:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb60"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Covariance matrix ----</span></span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>Spart <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(t <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T){</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>  Spart[[t]] <span class="ot">&lt;-</span> Y[,t,drop<span class="ot">=</span><span class="cn">FALSE</span>] <span class="sc">%*%</span> <span class="fu">t</span>(Y[,t,<span class="at">drop=</span><span class="cn">FALSE</span>])</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>S <span class="ot">&lt;-</span> <span class="fu">reduce</span>(Spart, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)<span class="sc">/</span>T</span>
+<span id="cb60-7"><a href="#cb60-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-8"><a href="#cb60-8" aria-hidden="true" tabindex="-1"></a>OM <span class="ot">&lt;-</span> <span class="fu">solve</span>(S)</span>
+<span id="cb60-9"><a href="#cb60-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-10"><a href="#cb60-10" aria-hidden="true" tabindex="-1"></a>ch <span class="ot">&lt;-</span> <span class="fu">modif_chol</span>(OM)</span>
+<span id="cb60-11"><a href="#cb60-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-12"><a href="#cb60-12" aria-hidden="true" tabindex="-1"></a>mat_T <span class="ot">&lt;-</span> ch<span class="sc">$</span>T</span>
+<span id="cb60-13"><a href="#cb60-13" aria-hidden="true" tabindex="-1"></a>mat_D <span class="ot">&lt;-</span> ch<span class="sc">$</span>D</span>
+<span id="cb60-14"><a href="#cb60-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-15"><a href="#cb60-15" aria-hidden="true" tabindex="-1"></a>mat_T</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>              [,1]         [,2]       [,3]        [,4] [,5]
+[1,]  1.0000000000  0.000000000  0.0000000  0.00000000    0
+[2,] -1.9584904890  1.000000000  0.0000000  0.00000000    0
+[3,] -0.1487658302  0.079882300  1.0000000  0.00000000    0
+[4,] -0.0043927501  0.002124333 -1.0086949  1.00000000    0
+[5,]  0.0003030897 -1.000126024 -0.9619567 -0.03605665    1</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb62"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a>mat_D</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>         [,1]     [,2]     [,3]       [,4]         [,5]
+[1,] 1980.828  0.00000 0.000000 0.00000000 0.000000e+00
+[2,]    0.000 68.71831 0.000000 0.00000000 0.000000e+00
+[3,]    0.000  0.00000 2.998596 0.00000000 0.000000e+00
+[4,]    0.000  0.00000 0.000000 0.01184387 0.000000e+00
+[5,]    0.000  0.00000 0.000000 0.00000000 7.626307e-05</code></pre>
+</div>
+</div>
+<p>Now that we have <span class="math inline">\(T\)</span>, we can rebuild <span class="math inline">\(y^{(n)}\)</span> from its precedents:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb64"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">5</span></span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a>yn_partial <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb64-4"><a href="#cb64-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span>(m <span class="cf">in</span> <span class="fu">setdiff</span>(<span class="dv">1</span><span class="sc">:</span>N, n)){</span>
+<span id="cb64-5"><a href="#cb64-5" aria-hidden="true" tabindex="-1"></a>  yn_partial[[m]] <span class="ot">&lt;-</span> <span class="sc">-</span>mat_T[n,m] <span class="sc">*</span> Y[m,]</span>
+<span id="cb64-6"><a href="#cb64-6" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb64-7"><a href="#cb64-7" aria-hidden="true" tabindex="-1"></a>yn_estimated <span class="ot">&lt;-</span> <span class="fu">reduce</span>(yn_partial, <span class="st">`</span><span class="at">+</span><span class="st">`</span>)</span>
+<span id="cb64-8"><a href="#cb64-8" aria-hidden="true" tabindex="-1"></a>yn_measured <span class="ot">&lt;-</span> Y[n,]</span>
+<span id="cb64-9"><a href="#cb64-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb64-10"><a href="#cb64-10" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mar =</span> <span class="fu">c</span>(<span class="dv">5</span>,<span class="dv">5</span>,<span class="dv">4</span>,<span class="dv">2</span>))</span>
+<span id="cb64-11"><a href="#cb64-11" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(yn_measured, yn_estimated,</span>
+<span id="cb64-12"><a href="#cb64-12" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="fu">expression</span>(<span class="st">"True "</span><span class="sc">*</span><span class="fu">bold</span>(y)<span class="sc">^</span><span class="st">"(n)"</span><span class="sc">*</span><span class="st">" (simulated)"</span>),</span>
+<span id="cb64-13"><a href="#cb64-13" aria-hidden="true" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="fu">expression</span>(<span class="st">"Estimated "</span><span class="sc">*</span><span class="fu">hat</span>(<span class="fu">bold</span>(y))<span class="sc">^</span><span class="st">"(n)"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="graph_power_counter_poc_files/figure-html/unnamed-chunk-21-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>So this works too. Note again, it doesn’t work if the data is not structured (not shown here).</p>
+</section>
+</section>
+<section id="conclusions" class="level1">
+<h1>Conclusions</h1>
+<p>The previous approach to estimate the signal from the precision matrix was wrong. The bioinformatics literature uses some CV approaches, but apparently not with precision matrices.</p>
+<p>We could compare the covariance matrix in the data to the one inferred by the precision matrix, but a preliminary test is not working well?</p>
+<p>The two approaches from <em>Tong et al.</em> (2019) may work, although note that they predict the signal based on the full covariance matrix, this is not the same as the train/test partition with no exchange of information.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>
