@@ -34,14 +34,10 @@ message("---- Prepare data")
 
 #~ PSI -----
 mat_psi <- quantifs_filtered |>
-  mutate(Nincl = round(PSI * nb_reads),
-         Nexcl = round((1-PSI) * nb_reads)) |>
-  select(event_id, sample_id, Nincl, Nexcl) |>
+  select(event_id, sample_id, PSI) |>
   pivot_wider(id_cols = sample_id,
               names_from = event_id,
-              values_from = c(Nincl, Nexcl),
-              names_vary = "slowest",
-              names_glue = "{event_id}.{.value}"
+              values_from = PSI
   ) |>
   column_to_rownames("sample_id") |>
   as.matrix()
@@ -300,7 +296,7 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 # Save ----
 
-out_name <- "240130_revertpsi_noperm_7penalties"
+out_name <- "240131_revertpsi_nosep_noperm_7penalties"
 
 message("Saving as, ", out_name, " at ", date())
 
