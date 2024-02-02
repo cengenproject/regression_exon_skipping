@@ -80,6 +80,7 @@ tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_parmaterized_npn.cs
 tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_use_parameters_npn.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_params_nosepPSI.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240130_tests_revert_psi.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240202_recompandrevertpsi_noperm_7penalties.csv")
 
 
 

@@ -149,7 +149,24 @@ get_coefs_from_OM <- function(OM){
     mutate(literature = replace_na(literature, FALSE))
 }
 
-
+recompute_psi_from_counts <- function(mat_N){
+  stopifnot(identical(str_split_i(colnames(mat_N)[c(TRUE,FALSE)], "\\.", 1),
+                      str_split_i(colnames(mat_N)[c(FALSE,TRUE)], "\\.", 1)))
+  
+  stopifnot(identical(str_replace(colnames(mat_N)[c(TRUE,FALSE)],
+                                  "\\.Nincl", "\\.Nexcl"),
+                      colnames(mat_N)[c(FALSE,TRUE)]))
+  
+  mat_Nincl <- mat_N[,c(TRUE,FALSE)]
+  colnames(mat_Nincl) <- str_remove(colnames(mat_Nincl), "\\.Nincl$")
+  mat_Nexcl <- mat_N[,c(FALSE,TRUE)]
+  colnames(mat_Nexcl) <- str_remove(colnames(mat_Nexcl), "\\.Nexcl$")
+  
+  all.equal(dimnames(mat_Nincl), dimnames(mat_Nexcl))
+  
+  
+  mat_Nincl/(mat_Nincl + mat_Nexcl)
+}
 
 
 # ********** ----
@@ -275,18 +292,32 @@ res_quic$psi_valid_hat_u <- map2(res_quic$psi_valid_hat_t,
                                                                  .y$parameters)
                                  })
 
+
+
+#~ Convert back to PSI ----
+
+
+res_quic$rpsi_valid_hat_u <- map(res_quic$psi_valid_hat_u,
+                                 recompute_psi_from_counts)
+
+res_quic$rpsi_valid_u <- map(res_quic$psi_valid_u,
+                                 recompute_psi_from_counts)
+
+
+
 #~ compute metrics ----
-res_quic$Rsquared <- map2_dbl(res_quic$psi_valid_u, res_quic$psi_valid_hat_u,
+res_quic$Rsquared <- map2_dbl(res_quic$rpsi_valid_u, res_quic$rpsi_valid_hat_u,
                              ~ {
                                lm(as.numeric(.y) ~ as.numeric(.x)) |>
                                  summary() |>
                                  (\(x) x[["adj.r.squared"]])()
                              })
-res_quic$residuals = map2(res_quic$psi_valid_u, res_quic$psi_valid_hat_u,
+res_quic$residuals = map2(res_quic$rpsi_valid_u, res_quic$rpsi_valid_hat_u,
                           ~ .y - .x)
 res_quic$sum_abs_residuals = map_dbl(res_quic$residuals, ~ sum(abs(.x), na.rm = TRUE))
-res_quic$FEV = map2(res_quic$residuals, res_quic$psi_valid_u, ~ frac_explained_var(.x, .y, na.rm = TRUE))
+res_quic$FEV = map2(res_quic$residuals, res_quic$rpsi_valid_u, ~ frac_explained_var(.x, .y, na.rm = TRUE))
 res_quic$mean_FEV = map_dbl(res_quic$FEV, ~ mean(.x))
+
 res_quic$loss_frobenius = map2_dbl(res_quic$S_valid_t, res_quic$S_train_hat_t, ~loss_frob(.x, .y))
 res_quic$loss_quadratic = map2_dbl(res_quic$S_valid_t, res_quic$OM_train, ~loss_quad(.x, .y))
 
@@ -300,7 +331,7 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 # Save ----
 
-out_name <- "240130_revertpsi_noperm_7penalties"
+out_name <- "240202_recompandrevertpsi_noperm_7penalties"
 
 message("Saving as, ", out_name, " at ", date())
 
