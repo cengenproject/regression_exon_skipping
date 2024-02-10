@@ -177,7 +177,7 @@ res_quic1 <- expand_grid(fold = fold_names,
 res_quic1$psi_train_t <- map2(res_quic1$fold, res_quic1$permutation,
                               ~{
                                 out <- mat_train[folds != .x, 1:nb_psi] |>
-                                  projectNPN::transform_npn_shrinkage()
+                                  projectNPN::transform_npn_truncation()
                                 if(.y){
                                   rownm <- rownames(out$mat)
                                   out$mat <- apply(out$mat, 2, sample)
@@ -190,7 +190,7 @@ res_quic1$psi_train_t <- map2(res_quic1$fold, res_quic1$permutation,
 res_quic1$sf_train_t <- map(res_quic1$fold,
                             ~{
                               mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                                projectNPN::transform_npn_shrinkage()
+                                projectNPN::transform_npn_truncation()
                             })
 
 res_quic1$S_train_t <- map2(res_quic1$psi_train_t, res_quic1$sf_train_t,
@@ -203,13 +203,14 @@ res_quic1$psi_valid_u = map(res_quic1$fold,
 
 res_quic1$psi_valid_t = map2(res_quic1$psi_valid_u, res_quic1$psi_train_t,
                              ~{
-                               projectNPN::transform_npn_shrinkage(.x, .y[["parameters"]])
+                               projectNPN::transform_npn_truncation(.x,
+                                                                    parameters = .y[["parameters"]])
                              })
 
 res_quic1$sf_valid_t <- map2(res_quic1$fold, res_quic1$sf_train_t,
                              ~{
                                mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                                 projectNPN::transform_npn_shrinkage(.y[["parameters"]])
+                                 projectNPN::transform_npn_truncation(parameters = .y[["parameters"]])
                              })
 
 res_quic1$S_valid_t <- map2(res_quic1$psi_valid_t, res_quic1$sf_valid_t,
@@ -267,8 +268,8 @@ res_quic$psi_valid_hat_t <- map2(res_quic$OM_train, res_quic$sf_valid_t,
 res_quic$psi_valid_hat_u <- map2(res_quic$psi_valid_hat_t,
                                  res_quic$psi_train_t,
                                  ~{
-                                   projectNPN::rev_npn_shrinkage(.x,
-                                                                 .y$parameters)
+                                   projectNPN::rev_npn_truncation(.x,
+                                                                  .y$parameters)
                                  })
 
 #~ compute metrics ----
@@ -296,7 +297,7 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 # Save ----
 
-out_name <- "240202_recompandrevertpsi_noperm_7penalties"
+out_name <- "240209_npntrunc_psi_noperm_7penalties"
 
 
 message("Saving as, ", out_name, " at ", date())
