@@ -209,7 +209,7 @@ summary_metrics |>
 
 
 
-# Compare NPN shrinkage and zscore ----
+# Compare normalizations ----
 
 
 
@@ -217,8 +217,20 @@ summary_metrics |>
 tib_quic_npn <- read_csv("data/graph_power4/outputs/240202_recompandrevertpsi_noperm_7penalties.csv")
 tib_quic_zscore <- read_csv("data/graph_power4/outputs/240208_zscore_counts_noperm_7penalties.csv")
 
-tib_quic <- bind_rows(tib_quic_npn |>
+# NPN shrinage vs truncation
+tib_quic_shrink <- read_csv("data/graph_power4/outputs/240208_psi_noperm_7penalties.csv")
+tib_quic_trunc <- read_csv("data/graph_power4/outputs/240209_npntrunc_psi_noperm_7penalties.csv")
+
+# with imputation: shrinkage vs truncation
+tib_quic_shrink <- read_csv("data/graph_power4/outputs/240212_npnshrink_imp_noperm_7penalties.csv")
+tib_quic_trunc <- read_csv("data/graph_power4/outputs/240212_npntrunc_imput_psi_noperm_7penalties.csv")
+tib_quic_zscore <- read_csv("data/graph_power4/outputs/240212_zscore_imput_psi_noperm_7penalties.csv")
+
+
+tib_quic <- bind_rows(tib_quic_shrink |>
                         add_column(run = "NPN (shrunken)"),
+                      tib_quic_trunc |>
+                        add_column(run = "NPN (truncation)"),
                       tib_quic_zscore |>
                         add_column(run = "Zscore"))
 
