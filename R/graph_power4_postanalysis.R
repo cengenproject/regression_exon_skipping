@@ -80,9 +80,13 @@ tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_parmaterized_npn.cs
 tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_use_parameters_npn.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_params_nosepPSI.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240130_tests_revert_psi.csv")
+
+tib_quic <- read_csv("data/graph_power4/outputs/240131_revertpsi_nosep_noperm_7penalties.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240202_recompandrevertpsi_noperm_7penalties.csv")
 
-
+# 11 penalties (on cluster), PSI vs counts
+tib_quic <- read_csv("data/graph_power4/outputs/240208_recompandrevertpsi_noperm_11penalties.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240208_revertpsi_nosep_noperm_11penalties.csv")
 
 
 summary_metrics <- tib_quic |>
@@ -119,152 +123,142 @@ summary_metrics |>
 
 
 
+tib_quic1 <- read_csv("data/graph_power4/outputs/240202_recompandrevertpsi_noperm_7penalties.csv")
+tib_quic2 <- read_csv("data/graph_power4/outputs/240131_revertpsi_nosep_noperm_7penalties.csv")
+
+tib_quic <- bind_rows(
+  tib_quic1 |>
+    add_column(run = "recomputed"),
+  tib_quic2 |>
+    add_column(run = "counts")
+)
 
 
+summary_metrics <- tib_quic |>
+  filter(permutation == 0) |> select(-permutation) |>
+  summarize(across(-c(fold),
+                   list(mean = partial(mean, na.rm = TRUE),
+                        sd = partial(sd, na.rm = TRUE))),
+            .by = c(penalty, run) ) |>
+  pivot_longer(-c(penalty, run),
+               names_to = c("metric", "type"),
+               names_pattern = "(.+)_(mean|sd|pval)$",
+               values_to = "value") |>
+  pivot_wider(names_from = "type",
+              values_from = "value") |>
+  mutate(
+    metric = case_when(
+      metric == "prop_non_zero_coefs_litt" ~ "literature_TPR",
+      metric == "prop_non_zero_coefs_nonlitt" ~ "literature_FPR",
+      .default = metric) |>
+      fct_inorder()
+  )
 
 
+summary_metrics |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd, color = run)) +
+  theme_classic() +
+  facet_wrap(~metric, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10()
 
-# Are some PSI easier to predict ----
-tib_quic
-
-
-
-
-huge::huge.npn()
 
 
 # Compare sep and PSI ----
 
-quantifs_filtered |>
-  mutate(Nincl = round(PSI * nb_reads),
-         Nexcl = round((1-PSI) * nb_reads),
-         rPSI = Nincl/(Nincl+Nexcl)) |>
-  ggplot() + theme_classic() +
-  geom_point(aes(x = PSI, y = rPSI), alpha = .2)
+# 11 penalties (on cluster), PSI vs counts
+tib_quic_psi <- read_csv("data/graph_power4/outputs/240208_recompandrevertpsi_noperm_11penalties.csv")
+tib_quic_counts <- read_csv("data/graph_power4/outputs/240208_revertpsi_nosep_noperm_11penalties.csv")
+
+tib_quic <- bind_rows(tib_quic_psi |>
+                        add_column(run = "psi"),
+                      tib_quic_counts |>
+                        add_column(run = "counts"))
+
+summary_metrics <- tib_quic |>
+  filter(permutation == 0) |> select(-permutation) |>
+  summarize(across(-c(fold),
+                   list(mean = partial(mean, na.rm = TRUE),
+                        sd = partial(sd, na.rm = TRUE))),
+            .by = c(penalty, run) ) |>
+  pivot_longer(-c(penalty, run),
+               names_to = c("metric", "type"),
+               names_pattern = "(.+)_(mean|sd|pval)$",
+               values_to = "value") |>
+  pivot_wider(names_from = "type",
+              values_from = "value") |>
+  mutate(
+    metric = case_when(
+      metric == "prop_non_zero_coefs_litt" ~ "literature_TPR",
+      metric == "prop_non_zero_coefs_nonlitt" ~ "literature_FPR",
+      .default = metric) |>
+      fct_inorder()
+  )
+
+summary_metrics |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd, color = run)) +
+  theme_classic() +
+  facet_wrap(~metric, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10()
 
 
 
 
-tib_quic <- qs::qread("data/intermediates/231012_cv/231013_quic.qs")
-
-xx <- tib_quic$psi_train[[which(tib_quic$fold == 1 & tib_quic$penalty == 0.5 & tib_quic$permutation == 0)]]
-
-dim(xx)
-
-xx[1:3,1:3]
-
-xx2 <- xx |>
-  as.data.frame() |>
-  rownames_to_column("sample_id") |>
-  pivot_longer(-sample_id,
-               names_to = c("event_id", "type"),
-               names_sep = "\\.",
-               values_to = "count_normalized") |>
-  pivot_wider(names_from = type,
-              values_from = count_normalized)
+# Compare normalizations ----
 
 
 
-# rescale a centered normal into a uniform
-# see https://math.stackexchange.com/questions/1063865/transforming-a-normal-distribution-to-a-uniform-one
-# and https://math.stackexchange.com/questions/2343952/how-to-transform-gaussiannormal-distribution-to-uniform-distribution
-rescale_distr <- function(x){
-  2*pnorm(x/sd(x))
-}
+# 7 penalties (on PC), NPN shrunken vs Zscore
+tib_quic_npn <- read_csv("data/graph_power4/outputs/240202_recompandrevertpsi_noperm_7penalties.csv")
+tib_quic_zscore <- read_csv("data/graph_power4/outputs/240208_zscore_counts_noperm_7penalties.csv")
 
-xx2 |>
-  mutate(rPSI = Nincl/(Nincl+Nexcl))
+# NPN shrinage vs truncation
+tib_quic_shrink <- read_csv("data/graph_power4/outputs/240208_psi_noperm_7penalties.csv")
+tib_quic_trunc <- read_csv("data/graph_power4/outputs/240209_npntrunc_psi_noperm_7penalties.csv")
 
-
-quantifs_filtered |>
-  mutate(Nincl = round(PSI * nb_reads),
-         Nexcl = round((1-PSI) * nb_reads))
-
-mat_psi[1:3,1:3]
-mat_psi_npn[1:3,1:3]
-
-mat_psi_npn <- huge::huge.npn(mat_psi)
-
-# Invert npn ----
-
-xx <- QUIC::QUIC(mat_psi_npn, rho = .1)
+# with imputation: shrinkage vs truncation
+tib_quic_shrink <- read_csv("data/graph_power4/outputs/240212_npnshrink_imp_noperm_7penalties.csv")
+tib_quic_trunc <- read_csv("data/graph_power4/outputs/240212_npntrunc_imput_psi_noperm_7penalties.csv")
 
 
+tib_quic <- bind_rows(tib_quic_shrink |>
+                        add_column(run = "NPN (shrunken)"),
+                      tib_quic_trunc |>
+                        add_column(run = "NPN (truncation)"))
 
+summary_metrics <- tib_quic |>
+  filter(permutation == 0) |> select(-permutation) |>
+  summarize(across(-c(fold),
+                   list(mean = partial(mean, na.rm = TRUE),
+                        sd = partial(sd, na.rm = TRUE))),
+            .by = c(penalty, run) ) |>
+  pivot_longer(-c(penalty, run),
+               names_to = c("metric", "type"),
+               names_pattern = "(.+)_(mean|sd|pval)$",
+               values_to = "value") |>
+  pivot_wider(names_from = "type",
+              values_from = "value") |>
+  mutate(
+    metric = case_when(
+      metric == "prop_non_zero_coefs_litt" ~ "literature_TPR",
+      metric == "prop_non_zero_coefs_nonlitt" ~ "literature_FPR",
+      .default = metric) |>
+      fct_inorder()
+  )
 
-
-
-
-mat_psi_unif <- apply(mat_psi_npn, 2, rescale_distr)
-
-# opar <- par(no.readonly = TRUE)
-
-i <- 2
-# par(mfrow = c(3,1))
-plot(mat_psi[,i], mat_psi_npn[,i])
-plot(mat_psi_npn[,i], mat_psi_unif[,i])
-plot(mat_psi[,i], mat_psi_unif[,i])
-
-
-par(opar)
-
-
-
-
-make_npn <- function(x){
-  x = qnorm(apply(x, 2, rank)/(nrow(x) + 1))
-  x/sd(x[, 1])
-}
-mat_psi_npn2 <- make_npn(mat_psi)
-
-
-all.equal(mat_psi_npn2,mat_psi_npn)
-xx <- qnorm(apply(x, 2, rank)/(nrow(x) + 1))
-
-x2 <- pnorm(xx)
-x2 <- x2 * (nrow(x2)+1)
-
-
-
-
-plot(sort(xx[,1]))
-sd(xx[,1])
-apply(xx, 1, sd) |> hist(breaks = 100)
-x2 <- mat_psi_npn2*sd(mat_psi_npn2[,1])
-
-xx <- apply(x, 2, rank)/(nrow(x) + 1)
-x2 <- pnorm(qnorm(xx))
-all.equal(x2, xx)
-
-
-
-
-# ~~~~~ -----
-
-
-
-xx <- tib_quic |> filter(fold == 1, penalty == .1, permutation == 0)
-
-
-xx$S_train[[1]][1:3,1:3]
-
-
-hist(diag(xx$S_train[[1]]))
-
-
-xx$psi_estimated[[1]][1:3,1:3]
-
-aa <- xx$psi_valid[[1]]
-
-
-dim(aa)
-
-aa_npn <- huge::huge.npn(aa)
-aa[1:3,1:3]
-
-
-aa_npn_1row <- huge::huge.npn(aa[1,])
-
+summary_metrics |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd, color = run)) +
+  theme_classic() +
+  facet_wrap(~metric, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10()
 
 
 
