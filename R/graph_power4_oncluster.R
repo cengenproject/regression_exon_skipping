@@ -147,6 +147,22 @@ get_coefs_from_OM <- function(OM){
 
 
 
+replace_columns_of_na <- function(mat, val_to_insert = 0){
+  cols_to_replace <- apply(mat, 2L, \(.col) all(! is.finite(.col)))
+  
+  mat[,cols_to_replace] <- val_to_insert
+  mat
+}
+
+t_replace_columns_of_na <- function(trans_object, val_to_insert = 0){
+  stopifnot(identical(names(trans_object),
+                      c("mat", "parameters")))
+  stopifnot(identical(names(trans_object$parameters),
+                      c("means", "sds")))
+  
+  trans_object[["mat"]] <- replace_columns_of_na(trans_object[["mat"]], val_to_insert)
+  trans_object
+}
 
 # ********** ----
 
@@ -192,7 +208,8 @@ res_quic1$psi_train_t <- map2(res_quic1$fold, res_quic1$permutation,
 res_quic1$sf_train_t <- map(res_quic1$fold,
                             ~{
                               mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                                projectNPN::transform_zscore()
+                                projectNPN::transform_zscore() |>
+                                t_replace_columns_of_na()
                             })
 
 res_quic1$S_train_t <- map2(res_quic1$psi_train_t, res_quic1$sf_train_t,
@@ -213,7 +230,8 @@ res_quic1$psi_valid_t = map2(res_quic1$psi_valid_u, res_quic1$psi_train_t,
 res_quic1$sf_valid_t <- map2(res_quic1$fold, res_quic1$sf_train_t,
                              ~{
                                mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                                 projectNPN::transform_zscore(parameters = .y[["parameters"]])
+                                 projectNPN::transform_zscore(parameters = .y[["parameters"]]) |>
+                                 t_replace_columns_of_na()
                              })
 
 res_quic1$S_valid_t <- map2(res_quic1$psi_valid_t, res_quic1$sf_valid_t,
