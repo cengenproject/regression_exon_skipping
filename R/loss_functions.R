@@ -21,21 +21,72 @@ loss_kl <- function(Sts, OMtr){
   0.5 * (sum(Sts * OMtr) - logdet(Sts %*% OMtr) - nrow(Sts))
 }
 
-loss_frob <- function(Sts, Str){
+# Frobenius loss. Note when na.rm=TRUE, can only compare result for same set of NA
+loss_frob <- function(Sts, Str, na.rm = TRUE){
   stopifnot(all(nrow(Sts) == nrow(Str),
                 nrow(Sts) == ncol(Str),
                 ncol(Sts) == nrow(Sts)))
   
-  norm(Sts - Str, type = "F")
+  # norm(Sts - Str, type = "F") # equivalent when no NA
+  sqrt(sum( (Sts - Str)^2, na.rm = na.rm))
 }
+
+# Test Frobenius norm different methods
+# A <- matrix(rnorm(12),nrow = 4)
+# 
+# A[3,2] <- NA
+# A
+# 
+# norm(A, type = "F")
+# 
+# sqrt(sum(diag(t(A) %*% A)))
+# 
+# N <- 0
+# for(i in seq_len(nrow(A))){
+#   for(j in seq_len(ncol(A))){
+#     N <- N + A[i,j]^2
+#   }
+# }
+# sqrt(N)
+# 
+# sqrt(sum(A^2, na.rm = TRUE))
+
+
+
+# matrix multiplication with na.rm = TRUE
+# roughly equal to %*% when no NAs
+# `%*na%` <- function(A, B){
+#   stopifnot(ncol(A) == nrow(B))
+#   
+#   C <- matrix(nrow = nrow(A),
+#               ncol = ncol(B))
+#   
+#   for(i in seq_len(nrow(C))){
+#     for(j in seq_len(ncol(C))){
+#       
+#       C[i,j] <- sum(A[i,] * B[,j], na.rm = TRUE)
+#       
+#     }
+#   }
+#   C
+# }
+
+# more efficient version
+`%*na%` <- function(A, B){
+  A[is.na(A)] <- 0
+  B[is.na(B)] <- 0
+  A %*% B
+}
+
 
 loss_quad <- function(Sts, OMtr){
   stopifnot(all(nrow(Sts) == nrow(OMtr),
                 nrow(Sts) == ncol(OMtr),
                 ncol(Sts) == nrow(Sts)))
   
-  sum(diag( ( Sts %*% OMtr - diag(nrow(Sts)) )^2 ))
+  sum(diag( ( Sts %*na% OMtr - diag(nrow(Sts)) )^2 ))
 }
+
 
 
 loss_tong_cv_I <- possibly(function(Y, OM){

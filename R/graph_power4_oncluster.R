@@ -205,8 +205,7 @@ res_quic1$psi_valid_u = map(res_quic1$fold,
 res_quic1$psi_valid_t = map2(res_quic1$psi_valid_u, res_quic1$psi_train_t,
                              ~{
                                .x |>
-                                 impute::impute.knn() |> (\(.list) .list[["data"]])() |>
-                               projectNPN::transform_npn_shrinkage(.y[["parameters"]])
+                               projectNPN::transform_npn_shrinkage(.y[["parameters"]], na = "keep")
                              })
 
 res_quic1$sf_valid_t <- map2(res_quic1$fold, res_quic1$sf_train_t,
@@ -299,7 +298,7 @@ res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
 
 # Save ----
 
-out_name <- "240212_npnshrink_imp_noperm_7penalties"
+out_name <- "240220_npnshrink_imptrain_noperm_7penalties"
 
 
 message("Saving as, ", out_name, " at ", date())
