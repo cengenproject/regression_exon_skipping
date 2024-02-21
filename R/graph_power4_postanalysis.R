@@ -274,3 +274,48 @@ summary_metrics |>
 
 
 
+
+# Compare imputations ----
+
+
+# with imputation: shrinkage vs truncation
+tib_quic_knn <- read_csv("data/graph_power4/outputs/240220_npnshrink_imptrain_noperm_7penalties_powerlaw.csv")
+tib_quic_median <- read_csv("data/graph_power4/outputs/240220_npnshrink_impmedian_noperm_7penalties_powerlaw.csv")
+
+
+
+tib_quic <- bind_rows(tib_quic_knn |>
+                        add_column(run = "KNN"),
+                      tib_quic_median |>
+                        add_column(run = "median"))
+
+summary_metrics <- tib_quic |>
+  filter(permutation == 0) |> select(-permutation) |>
+  summarize(across(-c(fold),
+                   list(mean = partial(mean, na.rm = TRUE),
+                        sd = partial(sd, na.rm = TRUE))),
+            .by = c(penalty, run) ) |>
+  pivot_longer(-c(penalty, run),
+               names_to = c("metric", "type"),
+               names_pattern = "(.+)_(mean|sd|pval)$",
+               values_to = "value") |>
+  pivot_wider(names_from = "type",
+              values_from = "value") |>
+  mutate(
+    metric = case_when(
+      metric == "prop_non_zero_coefs_litt" ~ "literature_TPR",
+      metric == "prop_non_zero_coefs_nonlitt" ~ "literature_FPR",
+      .default = metric) |>
+      fct_inorder()
+  )
+
+summary_metrics |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd, color = run)) +
+  theme_classic() +
+  facet_wrap(~metric, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10()
+
+

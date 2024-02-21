@@ -177,7 +177,7 @@ res_quic1 <- expand_grid(fold = fold_names,
 res_quic1$psi_train_t <- map2(res_quic1$fold, res_quic1$permutation,
                               ~{
                                 out <- mat_train[folds != .x, 1:nb_psi] |>
-                                  impute::impute.knn() |> (\(.list) .list[["data"]])() |>
+                                  impute_median() |>
                                   projectNPN::transform_npn_shrinkage()
                                 if(.y){
                                   rownm <- rownames(out$mat)
@@ -304,7 +304,7 @@ res_quic$power_law <- map_dbl(res_quic$OM_train,
 
 # Save ----
 
-out_name <- "240220_npnshrink_imptrain_noperm_7penalties_powerlaw"
+out_name <- "240220_npnshrink_impmedian_noperm_7penalties_powerlaw"
 
 
 message("Saving as, ", out_name, " at ", date())

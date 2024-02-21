@@ -180,3 +180,11 @@ frac_explained_var <- function(resid, measured, na.rm = FALSE){
   
   pmax(1 - SSerr/SStot, 0)
 }
+
+
+impute_median <- function(mat){
+  
+  apply(mat, 2L, \(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x})
+}
+
+
