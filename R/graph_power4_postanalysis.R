@@ -328,3 +328,102 @@ summary_metrics |>
   scale_x_log10()
 
 
+
+# ROC curve
+summary_metrics |>
+  filter(startsWith(as.character(metric),"literature")) |>
+  mutate(metric = str_split_i(metric, "_", 2)) |>
+  pivot_wider(names_from = "metric",
+              values_from = c("mean", "sd")) |>
+  ggplot(aes(x = mean_FPR, y = mean_TPR,
+             ymin = mean_TPR - sd_TPR,
+             ymax = mean_TPR + sd_TPR,
+             xmin = mean_FPR - sd_FPR,
+             xmax = mean_FPR + sd_FPR,
+             color = run)) +
+  theme_classic() +
+  # facet_wrap(~loss, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .01) +
+  geom_errorbarh(height = .005) +
+  geom_point() +
+  geom_abline(linetype = "dashed", color = "grey") +
+  scale_x_continuous(limits = c(0,1)) +
+  scale_y_continuous(limits = c(0,1))
+
+
+
+
+
+# Bias loss ----
+tib_quic <- read_csv("data/graph_power4/outputs/240220_npnshrink_impmedian_noperm_7penalties_powerlaw.csv")
+
+
+
+summary_metrics <- tib_quic |>
+  filter(permutation == 0) |> select(-permutation) |>
+  summarize(across(-c(fold),
+                   list(mean = partial(mean, na.rm = TRUE),
+                        sd = partial(sd, na.rm = TRUE))),
+            .by = penalty ) |>
+  pivot_longer(-penalty,
+               names_to = c("metric", "type"),
+               names_pattern = "(.+)_(mean|sd|pval)$",
+               values_to = "value") |>
+  pivot_wider(names_from = "type",
+              values_from = "value") |>
+  mutate(
+    metric = case_when(
+      metric == "prop_non_zero_coefs_litt" ~ "literature_TPR",
+      metric == "prop_non_zero_coefs_nonlitt" ~ "literature_FPR",
+      .default = metric) |>
+      fct_inorder()
+  )
+
+summary_metrics |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  facet_wrap(~metric, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10()
+
+
+# Bias loss
+summary_metrics |>
+  filter(grepl("loss", metric)) |>
+  mutate(type = if_else(startsWith(as.character(metric), "bias_"),
+                        "Training bias",
+                        "Validation sampling"),
+         loss = str_match(metric, "loss_(.*)$")[,2]) |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd, color = type)) +
+  theme_classic() +
+  facet_wrap(~loss, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10()
+
+
+# ROC curve
+summary_metrics |>
+  filter(startsWith(as.character(metric),"literature")) |>
+  mutate(metric = str_split_i(metric, "_", 2)) |>
+  pivot_wider(names_from = "metric",
+              values_from = c("mean", "sd")) |>
+  ggplot(aes(x = mean_FPR, y = mean_TPR,
+             ymin = mean_TPR - sd_TPR,
+             ymax = mean_TPR + sd_TPR,
+             xmin = mean_FPR - sd_FPR,
+             xmax = mean_FPR + sd_FPR)) +
+  theme_classic() +
+  # facet_wrap(~loss, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .01) +
+  geom_errorbarh(height = .005) +
+  geom_point() +
+  geom_abline(linetype = "dashed", color = "grey") +
+  scale_x_continuous(limits = c(0,1)) +
+  scale_y_continuous(limits = c(0,1))
+
