@@ -128,6 +128,15 @@ summary_metrics |>
   scale_x_log10()
 
 
+summary_metrics |>
+  filter(grepl("loss", metric)) |>
+  ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  facet_wrap(~metric, scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10()
 
 
 

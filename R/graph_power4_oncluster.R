@@ -288,6 +288,12 @@ res_quic$mean_FEV = map_dbl(res_quic$FEV, ~ mean(.x))
 res_quic$loss_frobenius = map2_dbl(res_quic$S_valid_t, res_quic$S_train_hat_t, ~loss_frob(.x, .y))
 res_quic$loss_quadratic = map2_dbl(res_quic$S_valid_t, res_quic$OM_train, ~loss_quad(.x, .y))
 
+res_quic$bias_loss_frobenius = map2_dbl(res_quic$S_train_t, res_quic$S_train_hat_t,
+                                        ~loss_frob(.x, .y))
+res_quic$bias_loss_quadratic = map2_dbl(res_quic$S_train_t, res_quic$OM_train,
+                                        ~loss_quad(.x, .y))
+
+
 # process ground truth
 res_quic$adj = map(res_quic$OM_train, get_coefs_from_OM,
                    .progress = TRUE)
@@ -315,6 +321,7 @@ qs::qsave(res_quic, file.path(outdir,
 res_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
                 mean_FEV, loss_frobenius, loss_quadratic,
+                bias_loss_frobenius, bias_loss_quadratic,
                 prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt, power_law) |>
   readr::write_csv(file.path(outdir,
                              paste0(out_name, ".csv")))
