@@ -107,7 +107,7 @@ events_coords <- read_tsv(file.path(datadir, "221111_events_coordinates.tsv"),
   select(event_id, gene_id)
 
 all_interactions <- read_tsv(file.path(datadir, "sf_targets_v3.tsv"),
-                                    show_col_types = FALSE)
+                             show_col_types = FALSE)
 
 all_interactions_by_event <- all_interactions |>
   select(SF, targets) |>
@@ -205,7 +205,7 @@ res_quic1$psi_valid_u = map(res_quic1$fold,
 res_quic1$psi_valid_t = map2(res_quic1$psi_valid_u, res_quic1$psi_train_t,
                              ~{
                                .x |>
-                               projectNPN::transform_npn_shrinkage(.y[["parameters"]], na = "keep")
+                                 projectNPN::transform_npn_shrinkage(.y[["parameters"]], na = "keep")
                              })
 
 res_quic1$sf_valid_t <- map2(res_quic1$fold, res_quic1$sf_train_t,
@@ -221,10 +221,10 @@ res_quic1$S_valid_t <- map2(res_quic1$psi_valid_t, res_quic1$sf_valid_t,
 #~ estimate precision matrix! -----
 
 res_quic1$fit <- map(res_quic1$S_train_t,
-                        ~ QUIC::QUIC(.x,
-                                     rho = 1, path = rho_vals,
-                                     msg = 0),
-                        .progress = TRUE)
+                     ~ QUIC::QUIC(.x,
+                                  rho = 1, path = rho_vals,
+                                  msg = 0),
+                     .progress = TRUE)
 
 message("Done estimating precision matrix")
 
@@ -296,9 +296,15 @@ res_quic$prop_non_zero_coefs_litt = map_dbl(res_quic$adj,
 res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
                                                ~ mean(.x$coefficient[! .x$literature] != 0))
 
+res_quic$power_law <- map_dbl(res_quic$OM_train,
+                              ~{
+                                mat_power_law(.x[startsWith(rownames(.x), "SE_"),
+                                                 !startsWith(colnames(.x), "SE_")])
+                              })
+
 # Save ----
 
-out_name <- "240220_npnshrink_imptrain_noperm_7penalties"
+out_name <- "240220_npnshrink_imptrain_noperm_7penalties_powerlaw"
 
 
 message("Saving as, ", out_name, " at ", date())
@@ -309,9 +315,9 @@ qs::qsave(res_quic, file.path(outdir,
 res_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
                 mean_FEV, loss_frobenius, loss_quadratic,
-                prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt) |>
+                prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt, power_law) |>
   readr::write_csv(file.path(outdir,
-                              paste0(out_name, ".csv")))
+                             paste0(out_name, ".csv")))
 
 
 message("All done, ", date())

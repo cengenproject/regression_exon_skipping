@@ -89,6 +89,15 @@ tib_quic <- read_csv("data/graph_power4/outputs/240208_recompandrevertpsi_noperm
 tib_quic <- read_csv("data/graph_power4/outputs/240208_revertpsi_nosep_noperm_11penalties.csv")
 
 
+# No imputation on validation PSI
+tib_quic <- read_csv("data/graph_power4/outputs/240212_npntrunc_imput_psi_noperm_7penalties.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240220_npnshrink_imptrain_noperm_7penalties.csv")
+
+# added power law
+tib_quic <- read_csv("data/graph_power4/outputs/240220_npnshrink_imptrain_noperm_7penalties_powerlaw.csv")
+
+
+
 summary_metrics <- tib_quic |>
   filter(permutation == 0) |> select(-permutation) |>
   summarize(across(-c(fold),
@@ -123,14 +132,14 @@ summary_metrics |>
 
 
 
-tib_quic1 <- read_csv("data/graph_power4/outputs/240202_recompandrevertpsi_noperm_7penalties.csv")
-tib_quic2 <- read_csv("data/graph_power4/outputs/240131_revertpsi_nosep_noperm_7penalties.csv")
+tib_quic1 <- read_csv("data/graph_power4/outputs/240212_npnshrink_imp_noperm_7penalties.csv")
+tib_quic2 <- read_csv("data/graph_power4/outputs/240220_npnshrink_imptrain_noperm_7penalties.csv")
 
 tib_quic <- bind_rows(
   tib_quic1 |>
-    add_column(run = "recomputed"),
+    add_column(run = "both imputed"),
   tib_quic2 |>
-    add_column(run = "counts")
+    add_column(run = "training imputed")
 )
 
 
