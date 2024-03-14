@@ -6,15 +6,17 @@
 # Note: this is inspired by, and somewhat equivalent to `filter_PSI_and_TPM.R` (but with additional filtering for variable events)
 # However, the results of `filter_PSI_and_TPM.R` are NOT used here
 
+#re-run (minor adaptations) 240308 for bsn12 new dataset
 
 
 # Prefilter ----
 
 library(tidyverse)
 
-quantifs <- read_tsv("data/export_for_arman/221110_PSI_quantifications.tsv") |>
+quantifs <- read_tsv("../quantif_exon_skipping/data/export_for_arman/240308_PSI_quantifications.tsv") |>
   mutate(neuron_id = str_match(sample_id, "^([A-Z1-9]{2,4})r[0-9]{2,3}$")[,2]) |>
-  filter(! is.na(PSI))
+  filter(! is.na(PSI)) |>
+  filter(startsWith(event_id, "SE_"))
 
 putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
   filter(keep == 1 | keep == 2) |>
@@ -29,22 +31,21 @@ sf_expression <- read_tsv("data/export_for_arman/tx_expression.tsv.gz") |>
 
 #~ Filter neurons ----
 
-# Filter neurons with too few samples. Also remove Ref
+# Filter neurons with too few samples
 keep_neurons <- sf_expression |>
   select(sample_id, neuron_id) |>
   distinct() |>
   dplyr::count(neuron_id) |>
   filter(n > 2) |>
-  pull(neuron_id) |>
-  setdiff("Ref")
+  pull(neuron_id)
 
 
 sf_expression <- sf_expression |>
   filter(neuron_id %in% keep_neurons)
 
-
 quantifs <- quantifs |>
   filter(neuron_id %in% keep_neurons)
+
 
 
 #~ Filter events ----
@@ -63,16 +64,19 @@ quantifs_filtered_n_reads <- quantifs |>
 
 
 # filter based on nb of samples that event was measured in
-quantifs_filtered_n_reads |>
-  filter(! is.na(PSI)) |>
-  group_by(event_id) |>
-  summarize(nb_samples = n(),
-            nb_neurons = n_distinct(neuron_id)) |>
-  ggplot() + theme_classic() +
-  geom_point(aes(x = nb_neurons, y = nb_samples), alpha = .2) +
-  xlab("Number of neurons") + ylab("Number of samples") +
-  geom_hline(aes(yintercept = 100.5), color = 'darkred') +
-  geom_vline(aes(xintercept = 32.5), color = 'darkred')
+(
+  quantifs_filtered_n_reads |>
+    filter(! is.na(PSI)) |>
+    group_by(event_id) |>
+    summarize(nb_samples = n(),
+              nb_neurons = n_distinct(neuron_id)) |>
+    ggplot() + theme_classic() +
+    geom_point(aes(x = nb_neurons, y = nb_samples), alpha = .2) +
+    xlab("Number of neurons") + ylab("Number of samples") +
+    geom_hline(aes(yintercept = 70.5), color = 'darkred') +
+    geom_vline(aes(xintercept = 23.5), color = 'darkred')
+) |>
+  ggExtra::ggMarginal(type = "histogram")
 
 
 
@@ -81,8 +85,8 @@ events_to_keep_n_samples <- quantifs_filtered_n_reads |>
   group_by(event_id) |>
   summarize(nb_samples = n(),
             nb_neurons = n_distinct(neuron_id)) |>
-  filter(nb_samples > 100,
-         nb_neurons > 32) |>
+  filter(nb_samples > 70,
+         nb_neurons > 23) |>
   pull(event_id)
 
 
@@ -103,7 +107,7 @@ quantifs_filtered_nsamples |>
   ggplot() +
   theme_classic() +
   geom_point(aes(x = mean_PSI_btw_neurs, y = sd_PSI_btw_neurs)) +
-  geom_hline(aes(yintercept = 0.05), color = 'grey') +
+  geom_hline(aes(yintercept = 0.03), color = 'grey') +
   ggtitle("Real data")
 
 events_to_keep_variability <- quantifs_filtered_nsamples |>
@@ -115,13 +119,13 @@ events_to_keep_variability <- quantifs_filtered_nsamples |>
   summarize(mean_PSI_btw_neurs  = mean(mean_PSI),
             sd_PSI_btw_neurs = sd(mean_PSI),
             .groups = 'drop') |>
-  filter(sd_PSI_btw_neurs > 0.05) |>
+  filter(sd_PSI_btw_neurs > 0.03) |>
   pull(event_id)
 
 
 quantifs_filtered <- quantifs_filtered_nsamples |>
-  filter(event_id %in% events_to_keep_variability) |>
-  filter(! is.na(PSI))
+  filter(event_id %in% events_to_keep_variability)
+
 
 quantifs_filtered |>
   ggplot() +
@@ -132,16 +136,11 @@ quantifs_filtered |>
 
 #~ Save prefiltering ----
 
-write_lines(unique(quantifs_filtered$event_id),
-            "data/intermediates/230512_simulation_v10/events_to_keep.txt")
-write_lines(unique(quantifs_filtered$neuron_id),
-            "data/intermediates/230512_simulation_v10/neurons_to_keep.txt")
-
 qs::qsave(quantifs_filtered,
-          "data/intermediates/230512_simulation_v10//quantifs_prefiltered.qs")
+          "data/graph_power4/inputs/240308_preprocessed_quantifs_filtered.qs")
 
 qs::qsave(sf_expression,
-          "data/intermediates/230512_simulation_v10//sf_prefiltered.qs")
+          "data/graph_power4/inputs/240308_preprocessed_sf_expression.qs")
 
 
 
