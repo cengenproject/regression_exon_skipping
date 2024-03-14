@@ -21,9 +21,9 @@ transform_rev <- switch(params$transformation,
 
 # Each step
 
-extract_transform_psi_train <- function(.fold, .permutation){
+extract_transform_se_train <- function(.fold, .permutation){
   
-  out <- mat_train[folds != .fold, 1:nb_psi] |>
+  out <- mat_train[folds != .fold, 1:nb_se] |>
     impute() |>
     transform_fwd()
   
@@ -40,22 +40,22 @@ extract_transform_psi_train <- function(.fold, .permutation){
 
 extract_transform_sf_train <- function(.fold){
   
-  mat_train[folds != .fold, (nb_psi+1):(nb_psi+nb_sf)] |>
+  mat_train[folds != .fold, (nb_se+1):(nb_se+nb_sf)] |>
     transform_fwd()
 }
 
 
-compute_S <- function(.psi, .sf){
+compute_S <- function(se, sf){
   
-  cov(cbind(.psi$mat, .sf$mat))
+  cov(cbind(se$mat, sf$mat))
 }
 
 
 
 
-extract_psi_valid <- function(.fold){
+extract_se_valid <- function(.fold){
   
-  mat_train[folds == .fold, 1:nb_psi]
+  mat_train[folds == .fold, 1:nb_se]
 }
 
 
@@ -70,7 +70,7 @@ transform_from_prev <- function(untransformed, prev_transformed){
 
 extract_transform_sf_valid <- function(.fold, prev_transformed){
   
-  mat_train[folds == .fold, (nb_psi+1):(nb_psi+nb_sf)] |>
+  mat_train[folds == .fold, (nb_se+1):(nb_se+nb_sf)] |>
     transform_fwd(prev_transformed[["parameters"]])
 }
 
@@ -104,19 +104,19 @@ extract_S_train_estimate <- function(.fit, .S_train){
 }
 
 
-estimate_psi <- function(.OM, .sf_valid){
-  OM21 <- .OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
-  OM11 <- .OM[1:nb_psi, 1:nb_psi]
+estimate_se <- function(.OM, .sf_valid){
+  OM21 <- .OM[(nb_se + 1):(nb_se + nb_sf), 1:nb_se]
+  OM11 <- .OM[1:nb_se, 1:nb_se]
   
   W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
   t(t(W) %*% t(.sf_valid$mat))
 }
 
 
-untransform_psi_hat <- function(psi_valid_hat_t, prev_transform){
+untransform_se_hat <- function(se_valid_hat_t, prev_transform){
   
-  transform_rev(psi_valid_hat_t,
-                                    prev_transform$parameters)
+  transform_rev(se_valid_hat_t,
+                prev_transform$parameters)
 }
 
 extract_adj_mat <- function(OM){

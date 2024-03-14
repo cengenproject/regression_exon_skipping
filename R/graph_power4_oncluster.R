@@ -16,6 +16,7 @@ library(getopt)
 if(! interactive()){
   spec <- matrix(c(
     'date', 'd', 1, 'character',
+    'exonsInput', 'e', 1, 'character',
     'transformation', 't', 1, 'character',
     'imputation', 'i', 1, 'character',
     'permutations', 'p', 1, 'character',
@@ -28,11 +29,13 @@ if(! interactive()){
 } else{
   # Options for interactive
   params <- list(
-    date = "240314",
+    date = "240314b",
+    exonsInput = "PSI",
     transformation = "npnshrink",
     imputation = "median",
     permutations = "0:20",
     penalties = "c(10, 5, 2, 1, .5)",
+    # penalties = "c(10, 5, 2, 1, .7, .5, .4, .3, .2, .1)",
     algo = "QUIC"
   )
 }
@@ -48,9 +51,11 @@ params$penalties <- eval(str2expression(params$penalties))
 stopifnot(is.numeric(params$penalties) && length(params$penalties) > 0)
 
 
+params$exonsInput <- match.arg(params$exonsInput,
+                                   choices = c("PSI", "counts"))
+
 params$transformation <- match.arg(params$transformation,
           choices = c("npnshrink", "npntrunc", "Zscore"))
-
 
 params$imputation <- match.arg(params$imputation,
                                choices = c("median", "knn"))
@@ -70,21 +75,24 @@ source("R/functions_steps.R")
 outdir <- "data/graph_power4/outputs"
 
 
-datadir <- "data/graph_power4/inputs/240313_precomputed/"
+datadir <- "data/graph_power4/inputs/240314_precomputed/"
 
-nb_psi <- qs::qread(file.path(datadir, "nb_psi.qs"))
+nb_se <- qs::qread(file.path(datadir, "nb_se.qs"))
 nb_sf <- qs::qread(file.path(datadir, "nb_sf.qs"))
-mat_train <- qs::qread(file.path(datadir, "mat_train.qs"))
 folds <- qs::qread(file.path(datadir, "folds.qs"))
 mat_interactions_lit <- qs::qread(file.path(datadir, "mat_interactions_lit.qs"))
 
 
+mat_train <- switch(params$exonsInput,
+       PSI = qs::qread(file.path(datadir, "mat_train_psi.qs")),
+       counts = qs::qread(file.path(datadir, "mat_train_cnt.qs")))
 
 
+
+# Analysis ----
 
 rho_vals <- params$penalties |>
   set_names()
-
 
 fold_names <- sort(unique(folds)) |> set_names()
 
@@ -95,25 +103,25 @@ set.seed(123)
 res_quic1 <- expand_grid(fold = fold_names,
                          permutation = 0:1)
 
-res_quic1$psi_train_t <- map2(res_quic1$fold, res_quic1$permutation,
-                              extract_transform_psi_train)
+res_quic1$se_train_t <- map2(res_quic1$fold, res_quic1$permutation,
+                              extract_transform_se_train)
 
 res_quic1$sf_train_t <- map(res_quic1$fold,
                             extract_transform_sf_train)
 
-res_quic1$S_train_t <- map2(res_quic1$psi_train_t, res_quic1$sf_train_t,
+res_quic1$S_train_t <- map2(res_quic1$se_train_t, res_quic1$sf_train_t,
                             compute_S)
 
-res_quic1$psi_valid_u = map(res_quic1$fold, 
-                            extract_psi_valid)
+res_quic1$se_valid_u = map(res_quic1$fold, 
+                            extract_se_valid)
 
-res_quic1$psi_valid_t = map2(res_quic1$psi_valid_u, res_quic1$psi_train_t,
+res_quic1$se_valid_t = map2(res_quic1$se_valid_u, res_quic1$se_train_t,
                              transform_from_prev)
 
 res_quic1$sf_valid_t <- map2(res_quic1$fold, res_quic1$sf_train_t,
                              extract_transform_sf_valid)
 
-res_quic1$S_valid_t <- map2(res_quic1$psi_valid_t, res_quic1$sf_valid_t,
+res_quic1$S_valid_t <- map2(res_quic1$se_valid_t, res_quic1$sf_valid_t,
                             compute_S)
 
 
@@ -146,13 +154,13 @@ message("  Compute results")
 #~~ adjacency ----
 res_quic$adj <- map(res_quic$OM_train, extract_adj_mat)
 
-#~~ psi hat ----
-res_quic$psi_valid_hat_t <- map2(res_quic$OM_train, res_quic$sf_valid_t,
-                                 estimate_psi)
+#~~ se hat ----
+res_quic$se_valid_hat_t <- map2(res_quic$OM_train, res_quic$sf_valid_t,
+                                 estimate_se)
 
-res_quic$psi_valid_hat_u <- map2(res_quic$psi_valid_hat_t,
-                                 res_quic$psi_train_t,
-                                 untransform_psi_hat)
+res_quic$se_valid_hat_u <- map2(res_quic$se_valid_hat_t,
+                                 res_quic$se_train_t,
+                                 untransform_se_hat)
 
 
 
@@ -178,11 +186,11 @@ res_quic$bias_loss_quadratic = map2_dbl(res_quic$S_train_t,
 
 
 #~~ reconstruction ----
-res_quic$Rsquared <- map2_dbl(res_quic$psi_valid_u, res_quic$psi_valid_hat_u,
+res_quic$Rsquared <- map2_dbl(res_quic$se_valid_u, res_quic$se_valid_hat_u,
                               compute_metric_rsquared)
 
 
-res_quic$mean_FEV <- map2_dbl(res_quic$psi_valid_u, res_quic$psi_valid_hat_u,
+res_quic$mean_FEV <- map2_dbl(res_quic$se_valid_u, res_quic$se_valid_hat_u,
                               compute_metric_FEV)
 
 

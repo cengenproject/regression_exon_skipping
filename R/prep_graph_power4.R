@@ -28,11 +28,24 @@ message("---- Prepare data")
 
 
 #~~ PSI -----
-mat_psi <- quantifs_filtered |>
+mat_se_psi <- quantifs_filtered |>
   select(event_id, sample_id, PSI) |>
   pivot_wider(id_cols = sample_id,
               names_from = event_id,
               values_from = PSI
+  ) |>
+  column_to_rownames("sample_id") |>
+  as.matrix()
+
+mat_se_cnt <- quantifs_filtered |>
+  mutate(Nincl = round(PSI * nb_reads),
+         Nexcl = round((1-PSI) * nb_reads)) |>
+  select(event_id, sample_id, Nincl, Nexcl) |>
+  pivot_wider(id_cols = sample_id,
+              names_from = event_id,
+              values_from = c(Nincl, Nexcl),
+              names_vary = "slowest",
+              names_glue = "{event_id}.{.value}"
   ) |>
   column_to_rownames("sample_id") |>
   as.matrix()
@@ -43,17 +56,9 @@ mat_psi <- quantifs_filtered |>
 
 
 # remove samples full of NA
-mat_psi <- mat_psi[rowMeans(is.na(mat_psi)) < .4, ]
-
-
-# Train/test split: note we do that BEFORE imputation
-set.seed(123)
-train_samples <- sample(rownames(mat_psi), size = .7*nrow(mat_psi))
-test_samples <- setdiff(rownames(mat_psi), train_samples)
-
-mat_psi_train <- mat_psi[train_samples,]
-
-
+prop_missing_per_sample <- rowMeans(is.na(mat_se_psi))
+mat_se_psi <- mat_se_psi[prop_missing_per_sample < .4, ]
+mat_se_cnt <- mat_se_cnt[prop_missing_per_sample < .4, ]
 
 
 #~ SF TPM ----
@@ -65,32 +70,44 @@ mat_sf <- sf_expression |>
               values_from = "logTPM") |>
   column_to_rownames("sample_id") |>
   as.matrix()
-mat_sf_train <- mat_sf[train_samples, ]
+
+
+
+# Train/test split
+set.seed(123)
+all_samples <- rownames(mat_se_psi)
+train_samples <- sample(all_samples, size = .7*length(all_samples))
+test_samples <- setdiff(all_samples, train_samples)
+
+nb_se <- ncol(mat_se_psi)
+nb_sf <- ncol(mat_sf)
+
+
+
+
+
 
 
 
 
 #~ Assemble data ----
 
-# match rows
-stopifnot(all.equal(rownames(mat_psi_train), rownames(mat_sf_train)))
-mat_train <- cbind(mat_psi_train, mat_sf_train)
+
+mat_train_psi <- cbind(mat_se_psi[train_samples,], mat_sf[train_samples, ])
+mat_train_cnt <- cbind(mat_se_cnt[train_samples,], mat_sf[train_samples, ])
+
+mat_test_psi <- cbind(mat_se_psi[test_samples,], mat_sf[test_samples, ])
+mat_test_cnt <- cbind(mat_se_cnt[test_samples,], mat_sf[test_samples, ])
 
 
-# finish
-nb_psi <- ncol(mat_psi_train)
-nb_sf <- ncol(mat_sf_train)
-
-mat_test <- cbind(mat_sf[test_samples,], mat_psi[test_samples, ])
-mat_sf_test <- mat_test[,1:nb_sf]
-mat_psi_test <- mat_test[,(nb_sf+1):(nb_sf+nb_psi)]
 
 
 # 5-fold cross-validation
-set.seed(1)
+set.seed(123)
 folds <- (rep(1:5,
               each = ceiling(nrow(mat_train)/5)) |>
-            sample())[1:nrow(mat_train)]
+            sample())[seq_along(train_samples)]
+
 
 
 # Get Ground truth ----
@@ -142,12 +159,13 @@ mat_interactions_lit[is.na(mat_interactions_lit)] <- FALSE
 
 # Save preprocessed data ----
 
-save_dir <- "data/graph_power4/inputs/240313_precomputed/"
+save_dir <- "data/graph_power4/inputs/240314_precomputed/"
 
 
-qs::qsave(nb_psi, file.path(save_dir, "nb_psi.qs"))
+qs::qsave(nb_se, file.path(save_dir, "nb_se.qs"))
 qs::qsave(nb_sf, file.path(save_dir, "nb_sf.qs"))
-qs::qsave(mat_train, file.path(save_dir, "mat_train.qs"))
+qs::qsave(mat_train_psi, file.path(save_dir, "mat_train_psi.qs"))
+qs::qsave(mat_train_cnt, file.path(save_dir, "mat_train_cnt.qs"))
 qs::qsave(folds, file.path(save_dir, "folds.qs"))
 qs::qsave(mat_interactions_lit, file.path(save_dir, "mat_interactions_lit.qs"))
 
