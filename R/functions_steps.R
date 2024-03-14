@@ -1,0 +1,157 @@
+# steps that get called from main script
+# Note they make heavy use of global variables!
+
+
+# Generic functions depending on params
+
+impute <- switch(params$imputation,
+                 median = impute_median)
+
+
+transform_fwd <- switch(params$transformation,
+                        npnshrink = projectNPN::transform_npn_shrinkage)
+  
+
+transform_rev <- switch(params$transformation,
+                        npnshrink = projectNPN::reverse_npn_shrinkage)
+
+
+
+
+
+# Each step
+
+extract_transform_psi_train <- function(.fold, .permutation){
+  
+  out <- mat_train[folds != .fold, 1:nb_psi] |>
+    impute() |>
+    transform_fwd()
+  
+  if(.permutation){
+    rownm <- rownames(out$mat)
+    out$mat <- apply(out$mat, 2, sample)
+    rownames(out$mat) <- rownm
+  }
+  
+  out
+}
+
+
+
+extract_transform_sf_train <- function(.fold){
+  
+  mat_train[folds != .fold, (nb_psi+1):(nb_psi+nb_sf)] |>
+    transform_fwd()
+}
+
+
+compute_S <- function(.psi, .sf){
+  
+  cov(cbind(.psi$mat, .sf$mat))
+}
+
+
+
+
+extract_psi_valid <- function(.fold){
+  
+  mat_train[folds == .fold, 1:nb_psi]
+}
+
+
+
+transform_from_prev <- function(untransformed, prev_transformed){
+  
+  untransformed |>
+    transform_fwd(prev_transformed[["parameters"]], na = "keep")
+}
+
+
+
+extract_transform_sf_valid <- function(.fold, prev_transformed){
+  
+  mat_train[folds == .fold, (nb_psi+1):(nb_psi+nb_sf)] |>
+    transform_fwd(prev_transformed[["parameters"]])
+}
+
+
+
+estimate_precision_mat <- function(.S){
+  QUIC::QUIC(.S,
+             rho = 1, path = rho_vals,
+             msg = 0)
+}
+
+
+extract_precision_mat_estimate <- function(.fit, .S_train){
+  
+  map(seq_along(rho_vals) |> set_names(rho_vals),
+      ~ {
+        OM <- .fit[["X"]][,, .x ]
+        dimnames(OM) <- dimnames(.S_train)
+        OM
+      })
+}
+
+extract_S_train_estimate <- function(.fit, .S_train){
+  
+  map(seq_along(rho_vals) |> set_names(rho_vals),
+      ~ {
+        S <- .fit[["W"]][,, .x ]
+        dimnames(S) <- dimnames(.S_train)
+        S
+      })
+}
+
+
+estimate_psi <- function(.OM, .sf_valid){
+  OM21 <- .OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
+  OM11 <- .OM[1:nb_psi, 1:nb_psi]
+  
+  W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
+  t(t(W) %*% t(.sf_valid$mat))
+}
+
+
+untransform_psi_hat <- function(psi_valid_hat_t, prev_transform){
+  
+  transform_rev(psi_valid_hat_t,
+                                    prev_transform$parameters)
+}
+
+extract_adj_mat <- function(OM){
+  OM[startsWith(rownames(OM), "SE_"),
+     !startsWith(colnames(OM), "SE_")]
+}
+
+
+# get_coefs_from_OM <- function(OM){
+#   
+#   OM[startsWith(rownames(OM), "SE_"),
+#      !startsWith(colnames(OM), "SE_")] |>
+#     as.data.frame() |>
+#     rownames_to_column("event_id_percount") |>
+#     pivot_longer(cols = -event_id_percount,
+#                  names_to = "sf_id",
+#                  values_to = "coefficient") |>
+#     mutate(event_id = str_extract(event_id_percount, "^SE_[0-9]+")) |>
+#     select(-event_id_percount) |>
+#     group_by(sf_id, event_id) |>
+#     summarize(coefficient = max(coefficient),
+#               .groups = "drop") |>
+#     left_join(all_interactions_by_event,
+#               by = c("event_id", "sf_id" = "sf_tx")) |>
+#     mutate(literature = replace_na(literature, FALSE))
+# }
+
+
+
+
+
+
+
+
+
+
+
+

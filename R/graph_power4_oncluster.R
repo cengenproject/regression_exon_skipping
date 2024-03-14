@@ -9,160 +9,80 @@ message("Starting, ", date())
 # Inits ----
 
 suppressPackageStartupMessages(library(tidyverse))
+library(getopt)
 
 
-library(wbData)
+
+if(! interactive()){
+  spec <- matrix(c(
+    'date', 'd', 1, 'character',
+    'transformation', 't', 1, 'character',
+    'imputation', 'i', 1, 'character',
+    'permutations', 'p', 1, 'character',
+    'penalties', 'n', 1, 'character',
+    'algo', 'a', 1, 'character'
+  ), byrow=TRUE, ncol=4)
+  
+  params <- getopt(spec)
+  
+} else{
+  # Options for interactive
+  params <- list(
+    date = "240314",
+    transformation = "npnshrink",
+    imputation = "median",
+    permutations = "0:20",
+    penalties = "c(10, 5, 2, 1, .5)",
+    algo = "QUIC"
+  )
+}
+
+# check and parse arguments
+stopifnot(str_detect(params$permutations, "^[0-9]+:[0-9]+$"))
+perms <- str_split_1(params$permutations, ":")
+params$permutations <- seq(from = perms[[1]], to = perms[[2]])
+stopifnot(is.integer(params$permutations) && length(params$permutations) > 0)
+
+stopifnot(str_detect(params$penalties, "^[0-9c()., ]+$"))
+params$penalties <- eval(str2expression(params$penalties))
+stopifnot(is.numeric(params$penalties) && length(params$penalties) > 0)
 
 
-gids <- wb_load_gene_ids(281)
-tx2g <- wb_load_tx2gene(281)
+params$transformation <- match.arg(params$transformation,
+          choices = c("npnshrink", "npntrunc", "Zscore"))
+
+
+params$imputation <- match.arg(params$imputation,
+                               choices = c("median", "knn"))
+
+params$algo <- match.arg(params$algo,
+                               choices = c("QUIC"))
+
+
+
+
+
+#~ Load ----
 
 source("R/loss_functions.R")
+source("R/functions_steps.R")
 
-datadir <- "data/graph_power4/inputs"
 outdir <- "data/graph_power4/outputs"
 
 
-#~ Load data ----
-quantifs_filtered <- qs::qread(file.path(datadir, "230206_preprocessed_quantifs_filtered.qs"))
-sf_expression <- qs::qread(file.path(datadir, "230206_preprocessed_sf_expression.qs")) |>
-  filter(transcript_id != "R07E5.14.2")
+datadir <- "data/graph_power4/inputs/240313_precomputed/"
 
-
-#~ Prepare data ----
-message("---- Prepare data")
-
-#~ PSI -----
-mat_psi <- quantifs_filtered |>
-  select(event_id, sample_id, PSI) |>
-  pivot_wider(id_cols = sample_id,
-              names_from = event_id,
-              values_from = PSI
-  ) |>
-  column_to_rownames("sample_id") |>
-  as.matrix()
-
-
-
-# filter PSI
-
-
-# remove samples full of NA
-mat_psi <- mat_psi[rowMeans(is.na(mat_psi)) < .4, ]
-
-
-# Train/test split: note we do that BEFORE imputation
-set.seed(123)
-train_samples <- sample(rownames(mat_psi), size = .7*nrow(mat_psi))
-test_samples <- setdiff(rownames(mat_psi), train_samples)
-
-mat_psi_train <- mat_psi[train_samples,]
-
-
-
-
-#~ SF TPM ----
-mat_sf <- sf_expression |>
-  mutate(logTPM = log(TPM + 1)) |>
-  select(transcript_id, sample_id, logTPM) |>
-  pivot_wider(id_cols = sample_id,
-              names_from = "transcript_id",
-              values_from = "logTPM") |>
-  column_to_rownames("sample_id") |>
-  as.matrix()
-mat_sf_train <- mat_sf[train_samples, ]
-
-
-
-
-#~ Assemble data ----
-
-# match rows
-stopifnot(all.equal(rownames(mat_psi_train), rownames(mat_sf_train)))
-mat_train <- cbind(mat_psi_train, mat_sf_train)
-
-
-# finish
-nb_psi <- ncol(mat_psi_train)
-nb_sf <- ncol(mat_sf_train)
-
-mat_test <- cbind(mat_sf[test_samples,], mat_psi[test_samples, ])
-mat_sf_test <- mat_test[,1:nb_sf]
-mat_psi_test <- mat_test[,(nb_sf+1):(nb_sf+nb_psi)]
-
-
-# 5-fold cross-validation
-set.seed(1)
-folds <- (rep(1:5,
-              each = ceiling(nrow(mat_train)/5)) |>
-            sample())[1:nrow(mat_train)]
-
-
-# Get Ground truth ----
-message("---- Get ground truth")
-
-
-events_coords <- read_tsv(file.path(datadir, "221111_events_coordinates.tsv"),
-                          show_col_types = FALSE) |>
-  select(event_id, gene_id)
-
-all_interactions <- read_tsv(file.path(datadir, "sf_targets_v3.tsv"),
-                             show_col_types = FALSE)
-
-all_interactions_by_event <- all_interactions |>
-  select(SF, targets) |>
-  distinct() |>
-  left_join(events_coords,
-            by = join_by(targets == gene_id),
-            relationship = "many-to-many") |>
-  filter(!is.na(event_id)) |>
-  select(event_id, SF) |>
-  mutate(sf_tx = wb_g2tx(SF, tx2g)) |>
-  select(-SF) |>
-  unnest(sf_tx) |>
-  distinct() |>
-  add_column(literature = TRUE)
-
-
-
-
-get_coefs_from_OM <- function(OM){
-  
-  OM[startsWith(rownames(OM), "SE_"),
-     !startsWith(colnames(OM), "SE_")] |>
-    as.data.frame() |>
-    rownames_to_column("event_id_percount") |>
-    pivot_longer(cols = -event_id_percount,
-                 names_to = "sf_id",
-                 values_to = "coefficient") |>
-    mutate(event_id = str_extract(event_id_percount, "^SE_[0-9]+")) |>
-    select(-event_id_percount) |>
-    group_by(sf_id, event_id) |>
-    summarize(coefficient = max(coefficient),
-              .groups = "drop") |>
-    left_join(all_interactions_by_event,
-              by = c("event_id", "sf_id" = "sf_tx")) |>
-    mutate(literature = replace_na(literature, FALSE))
-}
-
-
-
-
-# ********** ----
+nb_psi <- qs::qread(file.path(datadir, "nb_psi.qs"))
+nb_sf <- qs::qread(file.path(datadir, "nb_sf.qs"))
+mat_train <- qs::qread(file.path(datadir, "mat_train.qs"))
+folds <- qs::qread(file.path(datadir, "folds.qs"))
+mat_interactions_lit <- qs::qread(file.path(datadir, "mat_interactions_lit.qs"))
 
 
 
 
 
-
-
-
-
-
-# QUIC ----
-
-
-rho_vals <- c(10, 5, 2, 1, .5, .1, .05) |>
+rho_vals <- params$penalties |>
   set_names()
 
 
@@ -170,147 +90,122 @@ fold_names <- sort(unique(folds)) |> set_names()
 
 message("---- Starting!!")
 
+set.seed(123)
 #~ prepare data -----
 res_quic1 <- expand_grid(fold = fold_names,
-                         permutation = 0)
+                         permutation = 0:1)
 
 res_quic1$psi_train_t <- map2(res_quic1$fold, res_quic1$permutation,
-                              ~{
-                                out <- mat_train[folds != .x, 1:nb_psi] |>
-                                  impute_median() |>
-                                  projectNPN::transform_npn_shrinkage()
-                                if(.y){
-                                  rownm <- rownames(out$mat)
-                                  out$mat <- apply(out$mat, 2, sample)
-                                  rownames(out$mat) <- rownm
-                                }
-                                out
-                              }
-)
+                              extract_transform_psi_train)
 
 res_quic1$sf_train_t <- map(res_quic1$fold,
-                            ~{
-                              mat_train[folds != .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                                projectNPN::transform_npn_shrinkage()
-                            })
+                            extract_transform_sf_train)
 
 res_quic1$S_train_t <- map2(res_quic1$psi_train_t, res_quic1$sf_train_t,
-                            ~ cov(cbind(.x$mat, .y$mat)))
+                            compute_S)
 
 res_quic1$psi_valid_u = map(res_quic1$fold, 
-                            ~{
-                              mat_train[folds == .x, 1:nb_psi]
-                            })
+                            extract_psi_valid)
 
 res_quic1$psi_valid_t = map2(res_quic1$psi_valid_u, res_quic1$psi_train_t,
-                             ~{
-                               .x |>
-                                 projectNPN::transform_npn_shrinkage(.y[["parameters"]], na = "keep")
-                             })
+                             transform_from_prev)
 
 res_quic1$sf_valid_t <- map2(res_quic1$fold, res_quic1$sf_train_t,
-                             ~{
-                               mat_train[folds == .x, (nb_psi+1):(nb_psi+nb_sf)] |>
-                                 projectNPN::transform_npn_shrinkage(.y[["parameters"]])
-                             })
+                             extract_transform_sf_valid)
 
 res_quic1$S_valid_t <- map2(res_quic1$psi_valid_t, res_quic1$sf_valid_t,
-                            ~ cov(cbind(.x$mat, .y$mat)))
+                            compute_S)
 
 
 #~ estimate precision matrix! -----
-
+message("  Estimate precision matrix")
 res_quic1$fit <- map(res_quic1$S_train_t,
-                     ~ QUIC::QUIC(.x,
-                                  rho = 1, path = rho_vals,
-                                  msg = 0),
+                     estimate_precision_mat,
                      .progress = TRUE)
 
-message("Done estimating precision matrix")
 
 # extract estimates
+message("  Extract estimates")
 res_quic1$OM_train <- map2(res_quic1$fit, res_quic1$S_train_t,
-                           \(.fit, .S_train){
-                             map(seq_along(rho_vals) |> set_names(rho_vals),
-                                 ~ {
-                                   OM <- .fit[["X"]][,, .x ]
-                                   dimnames(OM) <- dimnames(.S_train)
-                                   OM
-                                 })
-                           })
+                           extract_precision_mat_estimate)
 
 res_quic1$S_train_hat_t <- map2(res_quic1$fit, res_quic1$S_train_t,
-                                \(.fit, .S_train){
-                                  map(seq_along(rho_vals) |> set_names(rho_vals),
-                                      ~ {
-                                        S <- .fit[["W"]][,, .x ]
-                                        dimnames(S) <- dimnames(.S_train)
-                                        S
-                                      })
-                                })
+                                extract_S_train_estimate)
 
-message("Done extracting fits")
+
 
 res_quic <- res_quic1 |>
   unnest(c(OM_train, S_train_hat_t))|>
   mutate(penalty = names(OM_train) |> as.numeric(),
          .before = 2)
 
-#~ compute CV estimate of psi ----
+
+#~ compute results ----
+message("  Compute results")
+
+#~~ adjacency ----
+res_quic$adj <- map(res_quic$OM_train, extract_adj_mat)
+
+#~~ psi hat ----
 res_quic$psi_valid_hat_t <- map2(res_quic$OM_train, res_quic$sf_valid_t,
-                                 \(.OM, .sf_valid){
-                                   OM21 <- .OM[(nb_psi + 1):(nb_psi + nb_sf), 1:nb_psi]
-                                   OM11 <- .OM[1:nb_psi, 1:nb_psi]
-                                   
-                                   W <- - OM21 %*% solve(OM11) # based on the estimated precision matrix
-                                   t(t(W) %*% t(.sf_valid$mat))
-                                 })
+                                 estimate_psi)
 
 res_quic$psi_valid_hat_u <- map2(res_quic$psi_valid_hat_t,
                                  res_quic$psi_train_t,
-                                 ~{
-                                   projectNPN::reverse_npn_shrinkage(.x,
-                                                                     .y$parameters)
-                                 })
+                                 untransform_psi_hat)
+
+
+
+
 
 #~ compute metrics ----
+message("  Compute metrics")
+
+#~~ fitting loss ----
+res_quic$loss_frobenius = map2_dbl(res_quic$S_valid_t,
+                                   res_quic$S_train_hat_t,
+                                   loss_frob)
+res_quic$loss_quadratic = map2_dbl(res_quic$S_valid_t,
+                                   res_quic$OM_train,
+                                   loss_quad)
+
+res_quic$bias_loss_frobenius = map2_dbl(res_quic$S_train_t,
+                                        res_quic$S_train_hat_t,
+                                        loss_frob)
+res_quic$bias_loss_quadratic = map2_dbl(res_quic$S_train_t,
+                                        res_quic$OM_train,
+                                        loss_quad)
+
+
+#~~ reconstruction ----
 res_quic$Rsquared <- map2_dbl(res_quic$psi_valid_u, res_quic$psi_valid_hat_u,
-                              ~ {
-                                lm(as.numeric(.y) ~ as.numeric(.x)) |>
-                                  summary() |>
-                                  (\(x) x[["adj.r.squared"]])()
-                              })
-res_quic$residuals = map2(res_quic$psi_valid_u, res_quic$psi_valid_hat_u,
-                          ~ .y - .x)
-res_quic$sum_abs_residuals = map_dbl(res_quic$residuals, ~ sum(abs(.x), na.rm = TRUE))
-res_quic$FEV = map2(res_quic$residuals, res_quic$psi_valid_u, ~ frac_explained_var(.x, .y, na.rm = TRUE))
-res_quic$mean_FEV = map_dbl(res_quic$FEV, ~ mean(.x))
-res_quic$loss_frobenius = map2_dbl(res_quic$S_valid_t, res_quic$S_train_hat_t, ~loss_frob(.x, .y))
-res_quic$loss_quadratic = map2_dbl(res_quic$S_valid_t, res_quic$OM_train, ~loss_quad(.x, .y))
-
-res_quic$bias_loss_frobenius = map2_dbl(res_quic$S_train_t, res_quic$S_train_hat_t,
-                                        ~loss_frob(.x, .y))
-res_quic$bias_loss_quadratic = map2_dbl(res_quic$S_train_t, res_quic$OM_train,
-                                        ~loss_quad(.x, .y))
+                              compute_metric_rsquared)
 
 
-# process ground truth
-res_quic$adj = map(res_quic$OM_train, get_coefs_from_OM,
-                   .progress = TRUE)
-res_quic$prop_non_zero_coefs_litt = map_dbl(res_quic$adj,
-                                            ~ mean(.x$coefficient[.x$literature] != 0))
-res_quic$prop_non_zero_coefs_nonlitt = map_dbl(res_quic$adj,
-                                               ~ mean(.x$coefficient[! .x$literature] != 0))
+res_quic$mean_FEV <- map2_dbl(res_quic$psi_valid_u, res_quic$psi_valid_hat_u,
+                              compute_metric_FEV)
 
-res_quic$power_law <- map_dbl(res_quic$OM_train,
-                              ~{
-                                mat_power_law(.x[startsWith(rownames(.x), "SE_"),
-                                                 !startsWith(colnames(.x), "SE_")])
-                              })
+
+
+
+
+#~~ bio relevance ----
+
+res_quic$literature_TPR = map_dbl(res_quic$adj,
+                                  compute_TPR)
+res_quic$literature_FPR = map_dbl(res_quic$adj,
+                                  compute_FPR)
+
+res_quic$power_law <- map_dbl(res_quic$adj,
+                              mat_power_law)
+
+
 
 # Save ----
 
-out_name <- "240220_npnshrink_impmedian_noperm_7penalties_powerlaw"
+out_name <- paste(params$date, params$transformation, params$imputation,
+                  length(params$permutations), length(rho_vals), params$algo,
+                  sep = "_")
 
 
 message("Saving as, ", out_name, " at ", date())
@@ -319,10 +214,10 @@ qs::qsave(res_quic, file.path(outdir,
                               paste0(out_name, ".qs")))
 
 res_quic |>
-  dplyr::select(penalty, fold, permutation, Rsquared, sum_abs_residuals,
+  dplyr::select(penalty, fold, permutation, Rsquared,
                 mean_FEV, loss_frobenius, loss_quadratic,
                 bias_loss_frobenius, bias_loss_quadratic,
-                prop_non_zero_coefs_litt, prop_non_zero_coefs_nonlitt, power_law) |>
+                literature_TPR, literature_FPR, power_law) |>
   readr::write_csv(file.path(outdir,
                              paste0(out_name, ".csv")))
 

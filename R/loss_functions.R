@@ -174,6 +174,17 @@ mat_power_law <- function(adj){
 }
 
 
+compute_metric_rsquared <- function(measured, estimated){
+  
+  lm(as.numeric(estimated) ~ as.numeric(measured)) |>
+    summary() |>
+    (\(x) x[["adj.r.squared"]])()
+}
+
+
+
+
+
 frac_explained_var <- function(resid, measured, na.rm = FALSE){
   SSerr <- rowSums(resid^2, na.rm = na.rm)
   SStot <- apply(measured, 1, \(.x) sum((.x - mean(.x, na.rm = na.rm))^2, na.rm = na.rm))
@@ -182,9 +193,52 @@ frac_explained_var <- function(resid, measured, na.rm = FALSE){
 }
 
 
+compute_metric_FEV <- function(measured, estimated){
+  mat_residuals <- estimated - measured
+  sum_abs_residuals <- sum(abs(mat_residuals), na.rm = TRUE)
+  
+  FEV <- frac_explained_var(mat_residuals, measured, na.rm = TRUE)
+  mean_FEV <- mean(FEV)
+  
+  mean_FEV
+}
+
+
+
+
 impute_median <- function(mat){
   
   apply(mat, 2L, \(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x})
 }
+
+
+
+
+
+
+
+compute_TPR <- function(adj){
+  
+  rows <- intersect(rownames(adj), rownames(mat_interactions_lit))
+  cols <- intersect(colnames(adj), colnames(mat_interactions_lit))
+  
+  nb_TP <- sum( (adj[rows, cols] != 0) * mat_interactions_lit[rows, cols] )
+  nb_T <- sum(mat_interactions_lit[rows,cols])
+  
+  nb_TP / nb_T
+}
+
+compute_FPR <- function(adj){
+  
+  rows <- intersect(rownames(adj), rownames(mat_interactions_lit))
+  cols <- intersect(colnames(adj), colnames(mat_interactions_lit))
+  
+  nb_FP <- sum( (adj[rows, cols] != 0) * (!mat_interactions_lit[rows, cols]) )
+  nb_F <- sum( ! mat_interactions_lit[rows,cols] )
+  
+  nb_FP / nb_F
+}
+
+
 
 
