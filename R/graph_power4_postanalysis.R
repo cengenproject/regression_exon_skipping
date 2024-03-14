@@ -79,41 +79,63 @@ summary_metrics |>
 
 
 # Compare version ----
-tib_quic <- read_csv("data/graph_power4/outputs/240118_tests.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240118_tests_object.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240118_tests_man_npn.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_parmaterized_npn.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_use_parameters_npn.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240126_tests_params_nosepPSI.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240130_tests_revert_psi.csv")
-
-tib_quic <- read_csv("data/graph_power4/outputs/240131_revertpsi_nosep_noperm_7penalties.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240202_recompandrevertpsi_noperm_7penalties.csv")
-
-# 11 penalties (on cluster), PSI vs counts
-tib_quic <- read_csv("data/graph_power4/outputs/240208_recompandrevertpsi_noperm_11penalties.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240208_revertpsi_nosep_noperm_11penalties.csv")
-
-
-# No imputation on validation PSI
-tib_quic <- read_csv("data/graph_power4/outputs/240212_npntrunc_imput_psi_noperm_7penalties.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240220_npnshrink_imptrain_noperm_7penalties.csv")
-
-# added power law
-tib_quic <- read_csv("data/graph_power4/outputs/240220_npnshrink_imptrain_noperm_7penalties_powerlaw.csv")
-
-
-# bsn12 updated data
-tib_quic <- read_csv("data/graph_power4/outputs/240308_bsn12_npnshrink_impmedian_noperm_7penalties_powerlaw.csv")
-
-# modulizing
-tib_quic <- read_csv("data/graph_power4/outputs/240313_bsn12_npnshrink_impmedian_noperm_7penalties_powerlaw.csv")
-tib_quic <- read_csv("data/graph_power4/outputs/240313b_bsn12_npnshrink_impmedian_noperm_7penalties_powerlaw.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240314_npnshrink_median_21_5_QUIC.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314b_npnshrink_median_21_5_QUIC.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314c_npnshrink_median_21_5_QUIC.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314d_QUIC_PSI_npnshrink_median_21_5.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314e_QUIC_counts_npnshrink_median_21_5.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314f_QUIC_counts_npnshrink_median_2_6.csv")
+
+
+# plot as a function of sparsity
 
 
 summary_metrics <- tib_quic |>
   filter(permutation == 0) |> select(-permutation) |>
+  mutate(`TPR/FPR` = literature_TPR/literature_FPR) |>
+  summarize(across(-c(fold),
+                   list(mean = partial(mean, na.rm = TRUE),
+                        sd = partial(sd, na.rm = TRUE))),
+            .by = c(penalty, sparsity) ) |>
+  pivot_longer(-c(penalty, sparsity),
+               names_to = c("metric", "type"),
+               names_pattern = "(.+)_(mean|sd|pval)$",
+               values_to = "value") |>
+  pivot_wider(names_from = "type",
+              values_from = "value")
+
+
+
+design <- "
+ EF
+ AB
+ IG
+ DC
+ KH
+"
+
+summary_metrics |>
+  ggplot(aes(x = sparsity, y = mean, ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  # facet_wrap(~metric) +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10() +
+  ylab(NULL) + xlab("Sparsity")
+
+
+
+
+
+
+
+
+# Previous version: as a function of penalty
+summary_metrics <- tib_quic |>
+  filter(permutation == 0) |> select(-permutation) |>
+  mutate(`TPR/FPR` = literature_TPR/literature_FPR) |>
   summarize(across(-c(fold),
                    list(mean = partial(mean, na.rm = TRUE),
                         sd = partial(sd, na.rm = TRUE))),
@@ -123,28 +145,22 @@ summary_metrics <- tib_quic |>
                names_pattern = "(.+)_(mean|sd|pval)$",
                values_to = "value") |>
   pivot_wider(names_from = "type",
-              values_from = "value") |>
-  mutate(
-    metric = case_when(
-      metric == "prop_non_zero_coefs_litt" ~ "literature_TPR",
-      metric == "prop_non_zero_coefs_nonlitt" ~ "literature_FPR",
-      .default = metric) |>
-      fct_inorder()
-  )
+              values_from = "value")
 
 
 
 design <- "
- CD#
  EF#
  AB#
- GHI
+ IG#
+ DCL
+ KH#
 "
 
 summary_metrics |>
-  filter(! metric == "sum_abs_residuals") |>
   ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd)) +
   theme_classic() +
+  # facet_wrap(~metric) +
   ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
   geom_line() +
   geom_errorbar(width = .1) +
@@ -175,65 +191,68 @@ summary_metrics |>
 
 
 #~ compare on same plot ----
-tib_quic_old <- read_csv("data/graph_power4/outputs/240220_npnshrink_impmedian_noperm_7penalties_powerlaw.csv")
-tib_quic_new <- read_csv("data/graph_power4/outputs/240308_bsn12_npnshrink_impmedian_noperm_7penalties_powerlaw.csv")
+tib_quic_old <- read_csv("data/graph_power4/outputs/240314g_glasso_PSI_npnshrink_median_2_4.csv")
+tib_quic_new <- read_csv("data/graph_power4/outputs/240314e_QUIC_PSI_npnshrink_median_2_6.csv")
 
 design <- "
-CD
-EF
-AB
-GH
-IJ
+ EF
+ AB
+ IG
+ DC
+ JH
 "
-
-
 
 tib_quic <- bind_rows(
   tib_quic_old |>
-    add_column(run = "old"),
+    add_column(run = "counts"),
   tib_quic_new |>
-    add_column(run = "new")
+    add_column(run = "PSI")
 )
 
 
 summary_metrics <- tib_quic |>
   filter(permutation == 0) |> select(-permutation) |>
-  mutate(`TPR/FPR` = prop_non_zero_coefs_litt/prop_non_zero_coefs_nonlitt) |>
+  mutate(`TPR/FPR` = literature_TPR/literature_FPR) |>
   summarize(across(-c(fold),
                    list(mean = partial(mean, na.rm = TRUE),
                         sd = partial(sd, na.rm = TRUE))),
             .by = c(penalty, run) ) |>
-  pivot_longer(-c(penalty, run),
+  select(- sparsity_sd) |>
+  pivot_longer(-c(penalty, run, sparsity_mean),
                names_to = c("metric", "type"),
                names_pattern = "(.+)_(mean|sd|pval)$",
                values_to = "value") |>
   pivot_wider(names_from = "type",
-              values_from = "value") |>
-  mutate(
-    metric = case_when(
-      metric == "prop_non_zero_coefs_litt" ~ "literature_TPR",
-      metric == "prop_non_zero_coefs_nonlitt" ~ "literature_FPR",
-      .default = metric) |>
-      fct_inorder()
-  )
+              values_from = "value")
 
 
 
 summary_metrics |>
-  filter(! metric == "sum_abs_residuals") |>
   ggplot(aes(x = penalty, y = mean, ymin = mean - sd, ymax = mean + sd, color = run)) +
   theme_classic() +
   ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  # facet_wrap(~metric) +
   geom_line() +
   geom_errorbar(width = .1) +
   geom_point() +
   scale_x_log10() +
   ylab(NULL) + xlab("Penalty (log)")
 
+summary_metrics |>
+  ggplot(aes(x = 100*(1-sparsity_mean), y = mean, ymin = mean - sd, ymax = mean + sd, color = run)) +
+  theme_classic() +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  # facet_wrap(~metric) +
+  geom_line() +
+  geom_errorbar(width = .2) +
+  geom_point() +
+  ylab(NULL) + xlab("Sparsity (%)")
 
 
 
-# With perm
+
+
+
 
 
 

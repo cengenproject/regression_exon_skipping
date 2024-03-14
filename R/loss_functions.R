@@ -241,4 +241,52 @@ compute_FPR <- function(adj){
 
 
 
+reconstruct_psi_from_counts <- function(mat_N){
+  stopifnot(identical(str_split_i(colnames(mat_N)[c(TRUE,FALSE)], "\\.", 1),
+                      str_split_i(colnames(mat_N)[c(FALSE,TRUE)], "\\.", 1)))
+  
+  stopifnot(identical(str_replace(colnames(mat_N)[c(TRUE,FALSE)],
+                                  "\\.Nincl", "\\.Nexcl"),
+                      colnames(mat_N)[c(FALSE,TRUE)]))
+  
+  mat_Nincl <- mat_N[,c(TRUE,FALSE)]
+  colnames(mat_Nincl) <- str_remove(colnames(mat_Nincl), "\\.Nincl$")
+  mat_Nexcl <- mat_N[,c(FALSE,TRUE)]
+  colnames(mat_Nexcl) <- str_remove(colnames(mat_Nexcl), "\\.Nexcl$")
+  
+  stopifnot(all.equal(dimnames(mat_Nincl), dimnames(mat_Nexcl)))
+  
+  
+  mat_Nincl/(mat_Nincl + mat_Nexcl)
+}
+
+
+
+reconstruct_adj_psi <- function(adj_cnt){
+  adj_incl <- adj_cnt[c(TRUE, FALSE), ]
+  rownames(adj_incl) <- str_remove(rownames(adj_incl), "\\.Nincl$")
+  
+  adj_excl <- adj_cnt[c(FALSE, TRUE), ]
+  rownames(adj_excl) <- str_remove(rownames(adj_excl), "\\.Nexcl$")
+  
+  stopifnot(all.equal(dimnames(adj_incl),
+                      dimnames(adj_excl)))
+  
+  adj_psi <- adj_incl - adj_excl
+  adj_psi
+}
+
+# average sparsity by event
+adj_sparsity <- function(adj_psi){
+  
+  rowMeans(adj_psi != 0) |> mean()
+}
+
+
+
+
+
+
+
+
 

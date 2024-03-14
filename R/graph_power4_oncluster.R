@@ -29,14 +29,14 @@ if(! interactive()){
 } else{
   # Options for interactive
   params <- list(
-    date = "240314b",
+    date = "240314g",
     exonsInput = "PSI",
     transformation = "npnshrink",
     imputation = "median",
-    permutations = "0:20",
-    penalties = "c(10, 5, 2, 1, .5)",
+    permutations = "0:1",
+    penalties = "c(10, 5, 2, 1, .5, .2)",
     # penalties = "c(10, 5, 2, 1, .7, .5, .4, .3, .2, .1)",
-    algo = "QUIC"
+    algo = "glasso"
   )
 }
 
@@ -61,7 +61,7 @@ params$imputation <- match.arg(params$imputation,
                                choices = c("median", "knn"))
 
 params$algo <- match.arg(params$algo,
-                               choices = c("QUIC"))
+                               choices = c("QUIC", "glasso"))
 
 
 
@@ -86,6 +86,16 @@ mat_interactions_lit <- qs::qread(file.path(datadir, "mat_interactions_lit.qs"))
 mat_train <- switch(params$exonsInput,
        PSI = qs::qread(file.path(datadir, "mat_train_psi.qs")),
        counts = qs::qread(file.path(datadir, "mat_train_cnt.qs")))
+
+
+
+nb_se <- switch (params$exonsInput,
+  PSI = nb_se,
+  counts = 2*nb_se
+)
+
+
+
 
 
 
@@ -114,6 +124,14 @@ res_quic1$S_train_t <- map2(res_quic1$se_train_t, res_quic1$sf_train_t,
 
 res_quic1$se_valid_u = map(res_quic1$fold, 
                             extract_se_valid)
+
+
+res_quic1$psi_valid_u <- switch(
+  params$exonsInput,
+  PSI = res_quic1$se_valid_u,
+  counts = map(res_quic1$se_valid_u, reconstruct_psi_from_counts)
+)
+
 
 res_quic1$se_valid_t = map2(res_quic1$se_valid_u, res_quic1$se_train_t,
                              transform_from_prev)
@@ -152,15 +170,41 @@ res_quic <- res_quic1 |>
 message("  Compute results")
 
 #~~ adjacency ----
-res_quic$adj <- map(res_quic$OM_train, extract_adj_mat)
 
-#~~ se hat ----
-res_quic$se_valid_hat_t <- map2(res_quic$OM_train, res_quic$sf_valid_t,
-                                 estimate_se)
+res_quic$adj <- switch(
+  params$exonsInput,
+  
+  PSI = map(res_quic$OM_train, extract_adj_mat),
+  
+  counts = res_quic$OM_train |>
+    map(extract_adj_mat) |>
+    map(reconstruct_adj_psi)
+)
+
+
+
+
+#~~ PSI hat ----
+
+res_quic$se_valid_hat_t <- map2(res_quic$OM_train,
+                                res_quic$sf_valid_t,
+                                estimate_se)
 
 res_quic$se_valid_hat_u <- map2(res_quic$se_valid_hat_t,
                                  res_quic$se_train_t,
                                  untransform_se_hat)
+
+res_quic$psi_valid_hat_u <- switch(
+  params$exonsInput,
+  
+  PSI = res_quic$se_valid_hat_u,
+  counts = map(res_quic$se_valid_hat_u,
+               reconstruct_psi_from_counts)
+)
+
+
+
+
 
 
 
@@ -186,11 +230,13 @@ res_quic$bias_loss_quadratic = map2_dbl(res_quic$S_train_t,
 
 
 #~~ reconstruction ----
-res_quic$Rsquared <- map2_dbl(res_quic$se_valid_u, res_quic$se_valid_hat_u,
+res_quic$Rsquared <- map2_dbl(res_quic$psi_valid_u,
+                              res_quic$psi_valid_hat_u,
                               compute_metric_rsquared)
 
 
-res_quic$mean_FEV <- map2_dbl(res_quic$se_valid_u, res_quic$se_valid_hat_u,
+res_quic$mean_FEV <- map2_dbl(res_quic$psi_valid_u,
+                              res_quic$psi_valid_hat_u,
                               compute_metric_FEV)
 
 
@@ -207,12 +253,15 @@ res_quic$literature_FPR = map_dbl(res_quic$adj,
 res_quic$power_law <- map_dbl(res_quic$adj,
                               mat_power_law)
 
+res_quic$sparsity <- map_dbl(res_quic$adj, adj_sparsity)
+
 
 
 # Save ----
 
-out_name <- paste(params$date, params$transformation, params$imputation,
-                  length(params$permutations), length(rho_vals), params$algo,
+out_name <- paste(params$date, params$algo, params$exonsInput,
+                  params$transformation, params$imputation,
+                  length(params$permutations), length(params$penalties),
                   sep = "_")
 
 
@@ -225,7 +274,7 @@ res_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared,
                 mean_FEV, loss_frobenius, loss_quadratic,
                 bias_loss_frobenius, bias_loss_quadratic,
-                literature_TPR, literature_FPR, power_law) |>
+                literature_TPR, literature_FPR, power_law, sparsity) |>
   readr::write_csv(file.path(outdir,
                              paste0(out_name, ".csv")))
 

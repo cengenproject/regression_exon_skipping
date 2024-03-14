@@ -76,32 +76,63 @@ extract_transform_sf_valid <- function(.fold, prev_transformed){
 
 
 
-estimate_precision_mat <- function(.S){
-  QUIC::QUIC(.S,
-             rho = 1, path = rho_vals,
-             msg = 0)
-}
+estimate_precision_mat <- switch(
+  params$algo,
+  QUIC = function(.S){
+    QUIC::QUIC(.S,
+               rho = 1, path = rho_vals,
+               msg = 0)
+  },
+  glasso = function(.S){
+    map(rho_vals, ~glasso::glasso(.S, rho = .x))
+  }
+)
 
 
-extract_precision_mat_estimate <- function(.fit, .S_train){
-  
-  map(seq_along(rho_vals) |> set_names(rho_vals),
-      ~ {
-        OM <- .fit[["X"]][,, .x ]
-        dimnames(OM) <- dimnames(.S_train)
-        OM
-      })
-}
+extract_precision_mat_estimate <- switch(
+  params$algo,
+  QUIC = function(.fit, .S_train){
+    
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          OM <- .fit[["X"]][,, .x ]
+          dimnames(OM) <- dimnames(.S_train)
+          OM
+        })
+  },
+  glasso = function(.fit, .S_train){
+    
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          OM <- .fit[[.x]][["wi"]]
+          dimnames(OM) <- dimnames(.S_train)
+          OM
+        })
+  }
+)
 
-extract_S_train_estimate <- function(.fit, .S_train){
-  
-  map(seq_along(rho_vals) |> set_names(rho_vals),
-      ~ {
-        S <- .fit[["W"]][,, .x ]
-        dimnames(S) <- dimnames(.S_train)
-        S
-      })
-}
+
+extract_S_train_estimate <- switch(
+  params$algo,
+  QUIC = function(.fit, .S_train){
+    
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          S <- .fit[["W"]][,, .x ]
+          dimnames(S) <- dimnames(.S_train)
+          S
+        })
+  },
+  glasso = function(.fit, .S_train){
+    
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          S <- .fit[[.x]][["w"]]
+          dimnames(S) <- dimnames(.S_train)
+          S
+        })
+  }
+)
 
 
 estimate_se <- function(.OM, .sf_valid){
