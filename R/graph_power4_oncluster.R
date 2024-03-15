@@ -33,18 +33,24 @@ if(! interactive()){
     exonsInput = "PSI",
     transformation = "npnshrink",
     imputation = "median",
-    permutations = "0:1",
-    penalties = "c(10, 5, 2, 1, .5, .2)",
+    permutations = "0",
+    penalties = "c(10, 2, 1, .5)",
     # penalties = "c(10, 5, 2, 1, .7, .5, .4, .3, .2, .1)",
-    algo = "glasso"
+    algo = "CLIME"
   )
 }
 
 # check and parse arguments
-stopifnot(str_detect(params$permutations, "^[0-9]+:[0-9]+$"))
-perms <- str_split_1(params$permutations, ":")
-params$permutations <- seq(from = perms[[1]], to = perms[[2]])
-stopifnot(is.integer(params$permutations) && length(params$permutations) > 0)
+if(str_detect(params$permutations, "^[0-9]$")){
+  params$permutations <- as.integer(params$permutations)
+} else if(str_detect(params$permutations, "^[0-9]+:[0-9]+$")){
+  perms <- str_split_1(params$permutations, ":")
+  params$permutations <- seq(from = perms[[1]], to = perms[[2]])
+  stopifnot(is.integer(params$permutations) && length(params$permutations) > 1)
+} else{
+    stop("Failed to parse 'permutations' parameter")
+}
+
 
 stopifnot(str_detect(params$penalties, "^[0-9c()., ]+$"))
 params$penalties <- eval(str2expression(params$penalties))
@@ -61,7 +67,7 @@ params$imputation <- match.arg(params$imputation,
                                choices = c("median", "knn"))
 
 params$algo <- match.arg(params$algo,
-                               choices = c("QUIC", "glasso"))
+                               choices = c("QUIC", "glasso", "CLIME"))
 
 
 
@@ -104,14 +110,14 @@ nb_se <- switch (params$exonsInput,
 rho_vals <- params$penalties |>
   set_names()
 
-fold_names <- sort(unique(folds)) |> set_names()
+fold_names <- sort(unique(folds))[1:2] |> set_names()
 
 message("---- Starting!!")
 
 set.seed(123)
 #~ prepare data -----
 res_quic1 <- expand_grid(fold = fold_names,
-                         permutation = 0:1)
+                         permutation = params$permutations)
 
 res_quic1$se_train_t <- map2(res_quic1$fold, res_quic1$permutation,
                               extract_transform_se_train)

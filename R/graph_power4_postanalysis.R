@@ -85,6 +85,8 @@ tib_quic <- read_csv("data/graph_power4/outputs/240314c_npnshrink_median_21_5_QU
 tib_quic <- read_csv("data/graph_power4/outputs/240314d_QUIC_PSI_npnshrink_median_21_5.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240314e_QUIC_counts_npnshrink_median_21_5.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240314f_QUIC_counts_npnshrink_median_2_6.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314g_glasso_PSI_npnshrink_median_2_4.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314g_CLIME_PSI_npnshrink_median_1_4.csv")
 
 
 # plot as a function of sparsity

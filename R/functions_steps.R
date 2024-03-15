@@ -78,15 +78,30 @@ extract_transform_sf_valid <- function(.fold, prev_transformed){
 
 estimate_precision_mat <- switch(
   params$algo,
+  
   QUIC = function(.S){
     QUIC::QUIC(.S,
                rho = 1, path = rho_vals,
                msg = 0)
   },
+  
   glasso = function(.S){
     map(rho_vals, ~glasso::glasso(.S, rho = .x))
+  },
+  
+  CLIME = function(.S){
+   flare::sugm(.S,
+               lambda = rho_vals,
+               method = "clime",
+               verbose = FALSE)
   }
 )
+
+
+# Notes on flare output:
+# sigma is the input matrix, sigma2 has "perturb" added on the diagonal
+# icov is the symmetrized version of icov1 (specifically, for any element 
+# outside of diag, icov keeps the smallest of the sym, checking the source)
 
 
 extract_precision_mat_estimate <- switch(
@@ -105,6 +120,20 @@ extract_precision_mat_estimate <- switch(
     map(seq_along(rho_vals) |> set_names(rho_vals),
         ~ {
           OM <- .fit[[.x]][["wi"]]
+          dimnames(OM) <- dimnames(.S_train)
+          OM
+        })
+  },
+  CLIME = function(.fit, .S_train){
+    
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          OM <- .fit[["icov"]][[.x]]
+          if(all(OM == 0)){
+            rho <- rho_vals[[.x]]
+            OM <- diag(1/diag(.S_train))
+          }
+          
           dimnames(OM) <- dimnames(.S_train)
           OM
         })
@@ -128,6 +157,22 @@ extract_S_train_estimate <- switch(
     map(seq_along(rho_vals) |> set_names(rho_vals),
         ~ {
           S <- .fit[[.x]][["w"]]
+          dimnames(S) <- dimnames(.S_train)
+          S
+        })
+  },
+  CLIME = function(.fit, .S_train){
+    # need to compute inverse
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          OM <- .fit[["icov"]][[.x]]
+          
+          if(all(OM == 0)){
+            S <- diag(diag(.S_train))
+          } else{
+            S <- solve(OM)
+          }
+          
           dimnames(S) <- dimnames(.S_train)
           S
         })
