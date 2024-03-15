@@ -36,7 +36,7 @@ if(! interactive()){
     permutations = "0",
     penalties = "c(10, 2, 1, .5)",
     # penalties = "c(10, 5, 2, 1, .7, .5, .4, .3, .2, .1)",
-    algo = "CLIME"
+    algo = "SCIO"
   )
 }
 
@@ -67,7 +67,7 @@ params$imputation <- match.arg(params$imputation,
                                choices = c("median", "knn"))
 
 params$algo <- match.arg(params$algo,
-                               choices = c("QUIC", "glasso", "CLIME"))
+                               choices = c("QUIC", "glasso", "CLIME", "SCIO"))
 
 
 

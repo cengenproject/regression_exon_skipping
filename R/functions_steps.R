@@ -94,6 +94,10 @@ estimate_precision_mat <- switch(
                lambda = rho_vals,
                method = "clime",
                verbose = FALSE)
+  },
+  
+  SCIO = function(.S){
+    map(rho_vals, ~scio::scio(.S, lambda = .x))
   }
 )
 
@@ -137,6 +141,16 @@ extract_precision_mat_estimate <- switch(
           dimnames(OM) <- dimnames(.S_train)
           OM
         })
+  },
+  
+  SCIO = function(.fit, .S_train){
+    
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          OM <- .fit[[.x]][["w"]]
+          dimnames(OM) <- dimnames(.S_train)
+          OM
+        })
   }
 )
 
@@ -173,6 +187,23 @@ extract_S_train_estimate <- switch(
             S <- solve(OM)
           }
           
+          dimnames(S) <- dimnames(.S_train)
+          S
+        })
+  },
+  
+  SCIO = function(.fit, .S_train){
+    
+    map(seq_along(rho_vals) |> set_names(rho_vals),
+        ~ {
+          OM <- .fit[[.x]][["w"]]
+          
+          if(any(diag(OM) == 0)){
+            prob_diags <- which(diag(OM) == 0)
+            diag(OM)[prob_diags] <- abs(rnorm(length(prob_diags), sd = sd(diag(OM))/10))
+          }
+          
+          S <- solve(OM)
           dimnames(S) <- dimnames(.S_train)
           S
         })

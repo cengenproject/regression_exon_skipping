@@ -87,6 +87,7 @@ tib_quic <- read_csv("data/graph_power4/outputs/240314e_QUIC_counts_npnshrink_me
 tib_quic <- read_csv("data/graph_power4/outputs/240314f_QUIC_counts_npnshrink_median_2_6.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240314g_glasso_PSI_npnshrink_median_2_4.csv")
 tib_quic <- read_csv("data/graph_power4/outputs/240314g_CLIME_PSI_npnshrink_median_1_4.csv")
+tib_quic <- read_csv("data/graph_power4/outputs/240314g_SCIO_PSI_npnshrink_median_1_4.csv")
 
 
 # plot as a function of sparsity
@@ -194,7 +195,7 @@ summary_metrics |>
 
 #~ compare on same plot ----
 tib_quic_old <- read_csv("data/graph_power4/outputs/240314g_glasso_PSI_npnshrink_median_2_4.csv")
-tib_quic_new <- read_csv("data/graph_power4/outputs/240314e_QUIC_PSI_npnshrink_median_2_6.csv")
+tib_quic_new <- read_csv("data/graph_power4/outputs/240314g_SCIO_PSI_npnshrink_median_1_4.csv")
 
 design <- "
  EF
@@ -206,9 +207,9 @@ design <- "
 
 tib_quic <- bind_rows(
   tib_quic_old |>
-    add_column(run = "counts"),
+    add_column(run = "glasso"),
   tib_quic_new |>
-    add_column(run = "PSI")
+    add_column(run = "SCIO")
 )
 
 
