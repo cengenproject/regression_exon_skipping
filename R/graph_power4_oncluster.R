@@ -110,11 +110,11 @@ nb_se <- switch (params$exonsInput,
 rho_vals <- params$penalties |>
   set_names()
 
-fold_names <- sort(unique(folds))[1:2] |> set_names()
+fold_names <- sort(unique(folds)) |> set_names()
 
 message("---- Starting!!")
 
-set.seed(123)
+set.seed(sum(params$permutations))
 #~ prepare data -----
 res_quic1 <- expand_grid(fold = fold_names,
                          permutation = params$permutations)

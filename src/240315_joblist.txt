@@ -1,0 +1,6 @@
+module load R; Rscript R/graph_power4_oncluster.R --date '240315a' --exonsInput 'PSI' --transformation 'npnshrink' --permutations '0:20' --penalties 'c(10,5,1,.7,.6,.5,.4,.3,.2,.1,.05)' --algo 'QUIC'
+module load R; Rscript R/graph_power4_oncluster.R --date '240315b' --exonsInput 'PSI' --transformation 'npnshrink' --permutations '21:41' --penalties 'c(10,5,1,.7,.6,.5,.4,.3,.2,.1,.05)' --algo 'QUIC'
+module load R; Rscript R/graph_power4_oncluster.R --date '240315c' --exonsInput 'PSI' --transformation 'npnshrink' --permutations '42:62' --penalties 'c(10,5,1,.7,.6,.5,.4,.3,.2,.1,.05)' --algo 'QUIC'
+module load R; Rscript R/graph_power4_oncluster.R --date '240315d' --exonsInput 'PSI' --transformation 'npnshrink' --permutations '0:20' --penalties 'c(10,5,1,.7,.6,.5,.4,.3,.2,.1,.05)' --algo 'glasso'
+module load R; Rscript R/graph_power4_oncluster.R --date '240315e' --exonsInput 'PSI' --transformation 'npnshrink' --permutations '21:41' --penalties 'c(10,5,1,.7,.6,.5,.4,.3,.2,.1,.05)' --algo 'glasso'
+module load R; Rscript R/graph_power4_oncluster.R --date '240315f' --exonsInput 'PSI' --transformation 'npnshrink' --permutations '42:62' --penalties 'c(10,5,1,.7,.6,.5,.4,.3,.2,.1,.05)' --algo 'glasso'
