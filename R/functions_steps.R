@@ -9,11 +9,15 @@ impute <- switch(params$imputation,
 
 
 transform_fwd <- switch(params$transformation,
-                        npnshrink = projectNPN::transform_npn_shrinkage)
+                        npnshrink = projectNPN::transform_npn_shrinkage,
+                        npntrunc = projectNPN::transform_npn_truncation,
+                        zscore = projectNPN::transform_zscore)
   
 
 transform_rev <- switch(params$transformation,
-                        npnshrink = projectNPN::reverse_npn_shrinkage)
+                        npnshrink = projectNPN::reverse_npn_shrinkage,
+                        npntrunc = projectNPN::reverse_npn_truncation,
+                        zscore = projectNPN::reverse_transform_zscore)
 
 
 
