@@ -273,8 +273,8 @@ out_name <- paste(params$date, params$algo, params$exonsInput,
 
 message("Saving as, ", out_name, " at ", date())
 
-qs::qsave(res_quic, file.path(outdir,
-                              paste0(out_name, ".qs")))
+#qs::qsave(res_quic, file.path(outdir,
+ #                             paste0(out_name, ".qs")))
 
 res_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared,
