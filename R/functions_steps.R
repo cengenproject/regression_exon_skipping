@@ -5,7 +5,8 @@
 # Generic functions depending on params
 
 impute <- switch(params$imputation,
-                 median = impute_median)
+                 median = impute_median,
+                 knn = imute_knn)
 
 
 transform_fwd <- switch(params$transformation,

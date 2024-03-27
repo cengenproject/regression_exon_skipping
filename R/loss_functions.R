@@ -211,6 +211,9 @@ impute_median <- function(mat){
   apply(mat, 2L, \(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x})
 }
 
+impute_knn <- function(mat){
+  impute::impute.knn(mat, k = 10)[["data"]]
+}
 
 
 
