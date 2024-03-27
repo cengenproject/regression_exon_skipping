@@ -61,7 +61,7 @@ params$exonsInput <- match.arg(params$exonsInput,
                                    choices = c("PSI", "counts"))
 
 params$transformation <- match.arg(params$transformation,
-          choices = c("npnshrink", "npntrunc", "Zscore"))
+          choices = c("npnshrink", "npntrunc", "zscore"))
 
 params$imputation <- match.arg(params$imputation,
                                choices = c("median", "knn"))
