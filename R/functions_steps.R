@@ -6,7 +6,7 @@
 
 impute <- switch(params$imputation,
                  median = impute_median,
-                 knn = imute_knn)
+                 knn = impute_knn)
 
 
 transform_fwd <- switch(params$transformation,
