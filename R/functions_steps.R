@@ -84,9 +84,9 @@ extract_transform_sf_valid <- function(.fold, prev_transformed){
   mat <- mat_train[folds == .fold, (nb_se+1):(nb_se+nb_sf)]
   
   if(params$transformation == "zscore"){
-    transform_fwd(prev_transformed[["parameters"]], na = "center")
+    transform_fwd(mat, prev_transformed[["parameters"]], na = "center")
   } else{
-    transform_fwd(prev_transformed[["parameters"]])
+    transform_fwd(mat, prev_transformed[["parameters"]])
   }
     
 }
