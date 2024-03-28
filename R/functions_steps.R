@@ -46,7 +46,7 @@ extract_transform_se_train <- function(.fold, .permutation){
 extract_transform_sf_train <- function(.fold){
   
   mat_train[folds != .fold, (nb_se+1):(nb_se+nb_sf)] |>
-    transform_fwd()
+    transform_fwd(na = "center")
 }
 
 
@@ -76,7 +76,7 @@ transform_from_prev <- function(untransformed, prev_transformed){
 extract_transform_sf_valid <- function(.fold, prev_transformed){
   
   mat_train[folds == .fold, (nb_se+1):(nb_se+nb_sf)] |>
-    transform_fwd(prev_transformed[["parameters"]])
+    transform_fwd(prev_transformed[["parameters"]], na = "center")
 }
 
 
