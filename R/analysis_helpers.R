@@ -23,10 +23,7 @@ read_one_res <- function(run_name, dir){
 
 
 
-
-
-
-summarize_metrics_by_pen <- function(tib){
+summarize_metrics_by_penalty <- function(tib){
   tib |>
     filter(permutation == 0) |> select(-permutation) |>
     mutate(`TPR/FPR` = literature_TPR/literature_FPR) |>
@@ -34,27 +31,16 @@ summarize_metrics_by_pen <- function(tib){
                      list(mean = partial(mean, na.rm = TRUE),
                           sd = partial(sd, na.rm = TRUE))),
               .by = penalty ) |>
-    pivot_longer(-penalty,
-                 names_to = c("metric", "type"),
+    pivot_longer(-c(penalty),
+                 names_to = c("metric", ".value"),
                  names_pattern = "(.+)_(mean|sd|pval)$",
-                 values_to = "value") |>
-    pivot_wider(names_from = "type",
-                values_from = "value")
-}
-
-# returns wide format, need to fuse with above
-summarize_metrics_by_pen2 <- function(tib){
-  tib |>
-    filter(permutation == 0) |> select(-permutation) |>
-    mutate(`TPR/FPR` = literature_TPR/literature_FPR) |>
-    summarize(across(-c(fold),
-                     list(mean = partial(mean, na.rm = TRUE),
-                          sd = partial(sd, na.rm = TRUE))),
-              .by = penalty )
+                 values_to = "value")
 }
 
 
-summarize_metrics_by_spars <- function(tib){
+
+
+summarize_metrics_by_sparsity <- function(tib){
   tib |>
     filter(permutation == 0) |> select(-permutation) |>
     mutate(`TPR/FPR` = literature_TPR/literature_FPR) |>
@@ -64,14 +50,10 @@ summarize_metrics_by_spars <- function(tib){
               .by = penalty ) |>
     select(- sparsity_sd) |>
     pivot_longer(-c(penalty, sparsity_mean),
-                 names_to = c("metric", "type"),
+                 names_to = c("metric", ".value"),
                  names_pattern = "(.+)_(mean|sd|pval)$",
-                 values_to = "value") |>
-    pivot_wider(names_from = "type",
-                values_from = "value")
+                 values_to = "value")
 }
-
-
 
 
 permutation_pval <- function(statistic, permutation){
@@ -90,7 +72,13 @@ get_pvals <- function(tib){
     summarize(across(-c(permutation),
                      list(pval = ~ permutation_pval(.x, permutation))),
               .by = c(penalty, fold)) |>
-    summarize(across(-c(fold), partial(mean, na.rm = TRUE)), .by = penalty )
+    summarize(across(-c(fold),
+                     partial(mean, na.rm = TRUE)),
+              .by = penalty ) |>
+    pivot_longer(-c(penalty),
+                 names_to = c("metric", ".value"),
+                 names_pattern = "(.+)_(mean|sd|pval)$",
+                 values_to = "value")
 }
 
 
