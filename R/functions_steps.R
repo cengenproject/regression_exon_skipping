@@ -45,8 +45,14 @@ extract_transform_se_train <- function(.fold, .permutation){
 
 extract_transform_sf_train <- function(.fold){
   
-  mat_train[folds != .fold, (nb_se+1):(nb_se+nb_sf)] |>
-    transform_fwd(na = "center")
+  mat <- mat_train[folds != .fold, (nb_se+1):(nb_se+nb_sf)]
+  
+  if(params$transformation == "zscore"){
+    transform_fwd(mat, na = "center")
+    
+  } else{
+    transform_fwd(mat)
+  }
 }
 
 
@@ -75,8 +81,14 @@ transform_from_prev <- function(untransformed, prev_transformed){
 
 extract_transform_sf_valid <- function(.fold, prev_transformed){
   
-  mat_train[folds == .fold, (nb_se+1):(nb_se+nb_sf)] |>
+  mat <- mat_train[folds == .fold, (nb_se+1):(nb_se+nb_sf)]
+  
+  if(params$transformation == "zscore"){
     transform_fwd(prev_transformed[["parameters"]], na = "center")
+  } else{
+    transform_fwd(prev_transformed[["parameters"]])
+  }
+    
 }
 
 
