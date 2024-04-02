@@ -21,7 +21,8 @@ if(! interactive()){
     'imputation', 'i', 1, 'character',
     'permutations', 'p', 1, 'character',
     'penalties', 'n', 1, 'character',
-    'algo', 'a', 1, 'character'
+    'algo', 'a', 1, 'character',
+    'knn_k', 'k', 2, 'integer'
   ), byrow=TRUE, ncol=4)
   
   params <- getopt(spec)
@@ -32,11 +33,12 @@ if(! interactive()){
     date = "240314g",
     exonsInput = "PSI",
     transformation = "npnshrink",
-    imputation = "median",
+    imputation = "knn",
     permutations = "0",
     penalties = "c(10, 2, 1, .5)",
-    # penalties = "c(10, 5, 2, 1, .7, .5, .4, .3, .2, .1)",
-    algo = "SCIO"
+    # penalties = "c(10, 5, 2, 1, .7, .5, .4, .3, .2, .1)",,
+    knn_k = 10,
+    algo = "glasso"
   )
 }
 
@@ -69,6 +71,13 @@ params$imputation <- match.arg(params$imputation,
 params$algo <- match.arg(params$algo,
                                choices = c("QUIC", "glasso", "CLIME", "SCIO"))
 
+if(params$imputation != "knn"){
+  if(! is.null(params$knn_k)){
+    warning("knn_k will be ignored as imputation method is ", params$imputation)
+  }
+} else{
+  if(is.null(params$knn_k)) params$knn_k <- 10
+}
 
 
 
@@ -265,8 +274,14 @@ res_quic$sparsity <- map_dbl(res_quic$adj, adj_sparsity)
 
 # Save ----
 
+if(params$imputation == "knn"){
+  k_str <- paste0(params$imputation, "_", "k", params$knn_k)
+} else{
+  k_str <- params$imputation
+}
+
 out_name <- paste(params$date, params$algo, params$exonsInput,
-                  params$transformation, params$imputation,
+                  params$transformation, k_str,
                   length(params$permutations), length(params$penalties),
                   sep = "_")
 

@@ -212,7 +212,7 @@ impute_median <- function(mat){
 }
 
 impute_knn <- function(mat){
-  impute::impute.knn(mat, k = 10)[["data"]]
+  impute::impute.knn(mat, k = params$knn_k)[["data"]]
 }
 
 
