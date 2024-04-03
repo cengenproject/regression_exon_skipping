@@ -105,7 +105,7 @@ mat_test_cnt <- cbind(mat_se_cnt[test_samples,], mat_sf[test_samples, ])
 # 5-fold cross-validation
 set.seed(123)
 folds <- (rep(1:5,
-              each = ceiling(nrow(mat_train)/5)) |>
+              each = ceiling(nrow(mat_train_psi)/5)) |>
             sample())[seq_along(train_samples)]
 
 
@@ -169,5 +169,8 @@ qs::qsave(mat_train_cnt, file.path(save_dir, "mat_train_cnt.qs"))
 qs::qsave(folds, file.path(save_dir, "folds.qs"))
 qs::qsave(mat_interactions_lit, file.path(save_dir, "mat_interactions_lit.qs"))
 
+
+qs::qsave(mat_test_psi, file.path(save_dir, "mat_test_psi.qs"))
+qs::qsave(mat_test_cnt, file.path(save_dir, "mat_test_cnt.qs"))
 
 
