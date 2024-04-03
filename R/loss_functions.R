@@ -212,7 +212,9 @@ impute_median <- function(mat){
 }
 
 impute_knn <- function(mat){
+  old_seed <- .Random.seed
   impute::impute.knn(mat, k = params$knn_k)[["data"]]
+  .Random.seed <- old_seed
 }
 
 
