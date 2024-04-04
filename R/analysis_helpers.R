@@ -57,12 +57,15 @@ summarize_metrics_by_sparsity <- function(tib){
 
 
 permutation_pval <- function(statistic, permutation){
-  # count prop of times the null is as big as the observed statistic
+  # count prop of times the null is as big as the observed statistic (centered)
   
-  permuted <- abs(statistic[ as.logical(permutation) ])
-  observed <- abs(statistic[ !permutation ])
+  statistic_centered <- statistic - mean(statistic)
   
-  mean(permuted >= observed)
+  permuted <- abs(statistic_centered[ as.logical(permutation) ])
+  observed <- abs(statistic_centered[ !permutation ])
+  
+  # using upper bound pu from Phipson and Smyth (2010) http://www.statsci.org/webguide/smyth/pubs/permp.pdf
+  (sum(permuted >= observed) + 1)/(length(permuted) + 1)
 }
 
 
@@ -78,7 +81,8 @@ get_pvals <- function(tib){
     pivot_longer(-c(penalty),
                  names_to = c("metric", ".value"),
                  names_pattern = "(.+)_(mean|sd|pval)$",
-                 values_to = "value")
+                 values_to = "value") |>
+    mutate(pval_adj = p.adjust(pval, "fdr"))
 }
 
 
