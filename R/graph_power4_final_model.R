@@ -22,7 +22,8 @@ if(! interactive()){
     'permutations', 'p', 1, 'character',
     'penalties', 'n', 1, 'character',
     'algo', 'a', 1, 'character',
-    'knn_k', 'k', 2, 'integer'
+    'knn_k', 'k', 2, 'integer',
+    'save', 's', 0, 'logical'
   ), byrow=TRUE, ncol=4)
   
   params <- getopt(spec)
@@ -294,8 +295,11 @@ out_name <- paste(params$date, params$algo, params$exonsInput,
 
 message("Saving as, ", out_name, " at ", date())
 
-#qs::qsave(res_quic, file.path(outdir,
-#                             paste0(out_name, ".qs")))
+if(! is.null(params$save)){
+  qs::qsave(res_quic, file.path(outdir,
+                                paste0(out_name, ".qs")))
+}
+
 
 res_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared,
