@@ -31,7 +31,7 @@ res <- tibble(run_name = str_remove(fl, "\\.csv$")) |>
                                     "[0-9]{1,2}", "_",
                                     run_nb_penalties = "[0-9]{1,2}"),
                        cols_remove = FALSE
-                       ) |>
+  ) |>
   nest(.by = starts_with("run_"), .key = "results")
 
 
@@ -97,7 +97,7 @@ by_run <- res_noperm |>
   select(-c(results, summary_by_sparsity)) |>
   mutate(gg = map(summary_by_penalty,
                   \(tib){
-                  
+                    
                     tib |>
                       filter(! startsWith(metric, "literature_"),
                              ! startsWith(metric, "bias_")) |>
@@ -113,18 +113,18 @@ by_run <- res_noperm |>
                       theme(legend.position = 'none')
                   }) |>
            set_names(run_name))
-  
+
 
 
 # by_run <- by_run |> filter(run_algo == "SCIO")
 for(i in seq_len(nrow(by_run))){
-
+  
   ggplot <- by_run[["gg"]][[i]] +
     ggtitle(i, by_run[["run_name"]][[i]]) +
     geom_vline(aes(xintercept = .2), linewidth = 10,
                alpha = .2, color = "grey")+
     geom_errorbar(width = .05)
-
+  
   ggsave(filename = paste0(i,"_",by_run[["run_name"]][[i]],".png"),
          plot = ggplot,
          path = "data/intermediates/240401_best_penalty_noperm/penalties_by_run",
@@ -146,7 +146,7 @@ best_by_run <- res_noperm |>
   select(-c(results, summary_by_sparsity)) |>
   mutate(manual_penalty = manual_best_penalty$penalty) |>
   mutate(summary_by_penalty = map2(summary_by_penalty, manual_penalty,
-                                    ~ {.x |> filter(penalty == .y)})) |>
+                                   ~ {.x |> filter(penalty == .y)})) |>
   unnest(cols = summary_by_penalty)
 
 best_by_run |>
@@ -1069,7 +1069,7 @@ if(identical(
 # check p-val distribution
 resfin |>
   filter(run_algo == "glasso", run_exonsInput == "PSI",
-       run_transformation == "npnshrink", run_imputation=="knn") |>
+         run_transformation == "npnshrink", run_imputation=="knn") |>
   unnest(results) |>
   # filter(penalty == 0.3, fold == 2) |>
   nest(.by = starts_with("run_")) |>
@@ -1085,167 +1085,13 @@ res_perm <- resfin |>
          summary_by_sparsity = map(results, summarize_metrics_by_sparsity),
          pvals_res = map(results, get_pvals)) |>
   mutate(summary_by_penalty = map2(summary_by_penalty, pvals_res,
-                    ~left_join(.x, .y, by = c("penalty", "metric"))),
+                                   ~left_join(.x, .y, by = c("penalty", "metric"))),
          summary_by_sparsity = map2(summary_by_sparsity, pvals_res,
                                     ~left_join(.x, .y, by = c("penalty", "metric")))) |>
   select(-c(results, pvals_res))
 
 
-
-#~ Plotted against penalty ----
-design <- "
- EF#
- AB#
- IG#
- DCK
- JH#
-"
-
-res_perm |>
-  unnest(summary_by_penalty) |>
-  select(-c(run_exonsInput, run_transformation,
-            run_imputation, run_nb_penalties,
-            summary_by_sparsity)) |>
-  ggplot(aes(x = penalty,
-             y = mean,
-             ymin = mean - sd, ymax = mean + sd)) +
-  theme_classic() +
-  # facet_wrap(~metric) +
-  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point(aes(shape = pval < .05, color = pval < .05)) +
-  scale_x_log10() +
-  ylab(NULL) + xlab("Penalty (log)") +
-  scale_color_manual(values = c("grey", 'red4'))
-
-
-#~ Plotted against sparsity ----
-design <- "
- EF
- AB
- IG
- DC
- JH
-"
-res_perm |>
-  unnest(summary_by_sparsity) |>
-  select(-c(run_exonsInput, run_transformation,
-            run_imputation, run_nb_penalties,
-            summary_by_penalty)) |>
-  ggplot(aes(x = 100*(1-sparsity_mean),
-             y = mean,
-             ymin = mean - sd, ymax = mean + sd,
-             color = run_algo)) +
-  theme_classic() +
-  # facet_wrap(~metric) +
-  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
-  geom_line() +
-  geom_errorbar(width = .001) +
-  geom_point(aes(shape = pval < .05, size = pval < .05)) +
-  scale_x_log10() +
-  ylab(NULL) + xlab("Sparsity (%)") +
-  scale_size_manual(values = c(.5,2.5))
-
-
-
-
-
-
-
-
-
-#~ Selected algo ----
-
-
-
-res_sparsity_perm |>
-  filter(run_algo == "glasso") |>
-  select(-c(run_exonsInput, run_transformation,
-            run_imputation, run_nb_penalties)) |>
-  ggplot(aes(x = 100*(1-(sparsity_mean)),
-             y = mean,
-             ymin = mean - sd, ymax = mean + sd)) +
-  theme_classic() +
-  # facet_wrap(~metric) +
-  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
-  geom_line() +
-  geom_errorbar(width = .001) +
-  geom_point(aes(shape = pval < .05, color = pval < .05)) +
-  # scale_x_log10() +
-  scale_x_continuous(trans = \(x){1-x/100})
-  ylab(NULL) + xlab("Sparsity (%)")
-
-
-
-
-
-
-
-# just glasso at specific penalty vs permutations
-
-resfin$results[[1]]$penalty |> unique()
-
-resfin$results[[1]] |>
-  filter(penalty == .2) |>
-  select(permutation, fold, `TPR/FPR`) |>
-  ggplot() +
-  ggbeeswarm::geom_quasirandom(aes(y = `TPR/FPR`, x = fold, color = permutation == 0))
-
-# power law
-resfin$results[[1]] |>
-  filter(penalty == .2) |>
-  select(permutation, fold, power_law) |>
-  ggplot() +
-  ggbeeswarm::geom_quasirandom(aes(y = power_law, x = fold, color = permutation == 0))
-
-
-# SCIO FEV
-res$results[[3]] |>
-  filter(penalty == .2) |>
-  select(permutation, fold, mean_FEV) |>
-  ggplot() +
-  ggbeeswarm::geom_quasirandom(aes(y = mean_FEV, x = fold, color = permutation == 0))
-
-
-
-# Check individual metrics pvals ----
-
-resfin |>
-  unnest(results) |>
-  select(-c(starts_with("run_"))) |>
-  select(permutation, penalty, loss_frobenius) |>
-  ggplot() +
-  ggbeeswarm::geom_quasirandom(aes(y = loss_frobenius, x = penalty,
-                                   color = permutation == 0)) +
-  scale_x_log10()
-
-
-resfin |>
-  unnest(results) |>
-  select(-c(starts_with("run_"))) |>
-  select(permutation, penalty, `TPR/FPR`) |>
-  ggplot() +
-  ggbeeswarm::geom_quasirandom(aes(y = `TPR/FPR`, x = penalty,
-                                   color = permutation == 0,
-                                   alpha = permutation == 0,
-                                   size = permutation == 0)) +
-  scale_x_log10() +
-  scale_alpha_manual(values = c(0.1,1)) +
-  scale_size_manual(values = c(0.5,1.5))
-
-resfin |>
-  unnest(results) |>
-  select(-c(starts_with("run_"))) |>
-  ggplot() +
-  ggbeeswarm::geom_quasirandom(aes(y = loss_frobenius, x = penalty,
-                                   color = permutation == 0,
-                                   alpha = permutation == 0,
-                                   size = permutation == 0)) +
-  scale_x_log10() +
-  ggtitle("loss_frobenius") +
-  scale_alpha_manual(values = c(0.1,1)) +
-  scale_size_manual(values = c(0.5,1.5))
+# Plot individual metrics permutations ----
 
 for(metr in unique(res_perm$summary_by_penalty[[1]]$metric)){
   gg <- resfin |>
@@ -1274,92 +1120,220 @@ gg
 
 
 
-# previous ----
+#~ Plotted against penalty ----
+design <- "
+ EF#
+ AB#
+ IG#
+ DCK
+ JH#
+"
 
-
-resdir <- "data/graph_power4/from_cluster/240315/"
-
-fl <- list.files(resdir)
-
-
-
-res <- tibble(run_name = str_remove(fl, "\\.csv$")) |>
-  mutate(results = map(run_name,
-                       read_one_res, resdir)) |>
-  unnest(cols = results) |>
-  mutate(`TPR/FPR` = (literature_TPR/literature_FPR) |> replace_na(1)) |>
-  separate_wider_regex(run_name,
-                       patterns = c("^(?:24[0-9]{4}[a-z]{0,2}_)?",
-                                    run_algo = "[QUICSOglassoLME]+", "_",
-                                    run_exonsInput = "PSI|counts", "_",
-                                    run_transformation = "npnshrink|npntrunc|zscore", "_",
-                                    run_imputation = "median|knn", "_",
-                                    "[0-9]{1,2}", "_",
-                                    run_nb_penalties = "[0-9]{1,2}"),
-                       cols_remove = TRUE
-  ) |>
-  nest(.by = starts_with("run_"), .key = "results") |>
-  filter(run_algo == "glasso")
-
-
-
-
-res_noperm <- res |>
-  mutate(summary_by_penalty = map(results, summarize_metrics_by_penalty),
-         summary_by_sparsity = map(results, summarize_metrics_by_sparsity))
-
-
-
-
-# expect 2 folds * 11 penalties = 22 values, for 62+1 permutations
-sapply(res$results,
-       \(.x) table(.x[["permutation"]]) |> table())
-
-res |>
-  # filter(run_algo == "glasso", run_exonsInput == "PSI",
-  #        run_transformation == "npnshrink", run_imputation=="knn") |>
-  unnest(results) |>
-  pull(permutation) |>
-  table() |>
-  table()
-
-
-
-# check p-val distribution
-res |>
-  unnest(results) |>
-  # filter(penalty == 0.3, fold == 2) |>
-  nest(.by = starts_with("run_")) |>
-  mutate(summary_by_penalty = map(data, get_pvals)) |>
-  select(-data) |>
+res_perm |>
   unnest(summary_by_penalty) |>
-  pull(pval) |>
-  table()
+  select(-starts_with("run_")) |>
+  ggplot(aes(x = penalty,
+             y = mean,
+             ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  # facet_wrap(~metric) +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point(aes(shape = pval_adj < .05, color = pval_adj < .05)) +
+  scale_x_log10() +
+  ylab(NULL) + xlab("Penalty (log)") +
+  scale_color_manual(values = c("grey", 'red4')) +
+  theme(legend.position = c(.9,.9))
 
 
-res_perm_test <- res |>
-  mutate(summary_by_penalty = map(results, summarize_metrics_by_penalty),
-         summary_by_sparsity = map(results, summarize_metrics_by_sparsity),
-         pvals_res = map(results, get_pvals)) |>
-  mutate(summary_by_penalty = map2(summary_by_penalty, pvals_res,
-                                   ~left_join(.x, .y, by = c("penalty", "metric"))),
-         summary_by_sparsity = map2(summary_by_sparsity, pvals_res,
-                                    ~left_join(.x, .y, by = c("penalty", "metric")))) |>
-  select(-c(results, pvals_res))
+#~ Plotted against sparsity ----
+design <- "
+ EF
+ AB
+ IG
+ DC
+ JH
+"
+
+res_perm |>
+  unnest(summary_by_sparsity) |>
+  select(-starts_with("run_")) |>
+  ggplot(aes(x = 100*(1-sparsity_mean),
+             y = mean,
+             ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  # facet_wrap(~metric) +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  geom_line() +
+  geom_errorbar(width = .001) +
+  geom_point(aes(shape = pval_adj < .05, color = pval_adj < .05)) +
+  scale_x_log10() +
+  ylab(NULL) + xlab("Sparsity (%)") +
+  scale_size_manual(values = c(.5,2.5)) +
+  scale_color_manual(values = c("grey", 'red4'))
 
 
-res_perm_test$summary_by_penalty[[1]] |> View()
+
+design <- "
+AC
+ED
+FB
+"
+
+res_perm |>
+  unnest(summary_by_sparsity) |>
+  select(-starts_with("run_")) |>
+  filter(! startsWith(metric, "bias_"),
+         ! startsWith(metric, "literature")) |>
+  mutate(metric = case_match(
+    metric,
+    "loss_frobenius" ~ "Frobenius loss",
+    "loss_quadratic" ~ "Quadratic loss",
+    "Rsquared" ~ "Reconstruction R squared",
+    "mean_FEV" ~ "Reconstruction Fraction explained variance",
+    "TPR/FPR" ~ "TPR/FPR",
+    "power_law" ~ "Network Power law",
+  )) |>
+  ggplot(aes(x = 100*(1-sparsity_mean),
+             y = mean,
+             ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  # facet_wrap(~metric) +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  geom_line() +
+  geom_errorbar(width = .01) +
+  geom_point(aes(shape = pval_adj < .05,
+                 color = pval_adj < .05),
+             size = 2) +
+  # scale_x_log10() +
+  ylab(NULL) + xlab("Sparsity (%)") +
+  scale_color_manual(values = c("grey", 'red4')) +
+  theme(legend.position = 'none')
 
 
 
-res |>
-  unnest(results) |>
-  select(-c(run_exonsInput, run_transformation,
-            run_imputation, run_nb_penalties)) |>
-  select(permutation, penalty, `TPR/FPR`) |>
-  ggplot() +
-  ggbeeswarm::geom_quasirandom(aes(y = `TPR/FPR`, x = penalty,
-                                   color = permutation == 0)) +
-  scale_x_log10()
+res_perm |>
+  unnest(summary_by_sparsity) |>
+  select(-starts_with("run_")) |>
+  filter(! startsWith(metric, "bias_"),
+         ! startsWith(metric, "literature")) |>
+  mutate(category = case_match(
+    metric,
+    "loss_frobenius" ~ "Global structure",
+    "loss_quadratic" ~ "Global structure",
+    "Rsquared" ~ "PSI reconstruction",
+    "mean_FEV" ~ "PSI reconstruction",
+    "TPR/FPR" ~ "Network",
+    "power_law" ~ "Network",
+  ) |>
+    factor(levels = c("Global structure", "PSI reconstruction", "Network")),
+  metric = case_match(
+    metric,
+    "loss_frobenius" ~ "Frobenius loss",
+    "loss_quadratic" ~ "Quadratic loss",
+    "Rsquared" ~ "R squared",
+    "mean_FEV" ~ "Fraction explained variance",
+    "TPR/FPR" ~ "TPR/FPR",
+    "power_law" ~ "Power law",
+  ) |>
+    factor(levels = c("Frobenius loss", "Quadratic loss",
+                      "R squared", "Fraction explained variance",
+                      "TPR/FPR", "Power law"))) |>
+  ggplot(aes(x = 100*(1-sparsity_mean),
+             y = mean,
+             ymin = mean - sd, ymax = mean + sd)) +
+  theme_bw() +
+  facet_grid(cols = vars(metric), rows = vars(category),
+             scales = "free_y") +
+  # ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  ggh4x::facet_nested_wrap(vars(category, metric),
+                           ncol = 2, nrow = 3,
+                           scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .01) +
+  geom_point(aes(shape = pval_adj < .05,
+                 color = pval_adj < .05),
+             size = 2) +
+  geom_vline(aes(xintercept = 97.9), linewidth = 5, alpha = .2) +
+  # scale_x_log10() +
+  ylab(NULL) + xlab("Sparsity (%)") +
+  scale_color_manual(values = c("grey", 'red4')) +
+  theme(legend.position = 'none')
+
+
+
+
+#~ Selected case ----
+
+res <- qs::qread("data/graph_power4/from_cluster/final_save/240404_glasso_PSI_npnshrink_knn_k10_2_16.qs")
+
+final_tib <- read_one_res("240404_glasso_PSI_npnshrink_knn_k10_2_16",
+                          "data/graph_power4/from_cluster/final_save/")
+
+# One with and one without permutations
+final_tib$permutation |> table()
+final_tib$fold |> table()
+
+design <- "
+ EF#
+ AB#
+ IG#
+ DCK
+ JH#
+"
+
+# re-check non-permuted (same as above but no pvals)
+final_tib |>
+  mutate(`TPR/FPR` = (literature_TPR/literature_FPR) |> replace_na(1)) |>
+  nest() |>
+  mutate(data = map(data, summarize_metrics_by_penalty)) |>
+  unnest(data) |>
+  ggplot(aes(x = penalty,
+             y = mean,
+             ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  # facet_wrap(~metric) +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10() +
+  ylab(NULL) + xlab("Penalty (log)") +
+  scale_color_manual(values = c("grey", 'red4')) +
+  theme(legend.position = c(.9,.9))
+
+# look at (double check) the permuted case
+final_tib |>
+  mutate(`TPR/FPR` = (literature_TPR/literature_FPR) |> replace_na(1)) |>
+  filter(permutation ==1) |> mutate(permutation = 0) |>
+  nest() |>
+  mutate(data = map(data, summarize_metrics_by_penalty)) |>
+  unnest(data) |>
+  ggplot(aes(x = penalty,
+             y = mean,
+             ymin = mean - sd, ymax = mean + sd)) +
+  theme_classic() +
+  # facet_wrap(~metric) +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  scale_x_log10() +
+  ylab(NULL) + xlab("Penalty (log)") +
+  scale_color_manual(values = c("grey", 'red4')) +
+  theme(legend.position = c(.9,.9))
+
+
+
+
+
+
+
+
+
+
+
+
 
 
