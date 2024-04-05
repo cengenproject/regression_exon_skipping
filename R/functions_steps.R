@@ -58,7 +58,7 @@ extract_transform_sf_train <- function(.fold){
 
 compute_S <- function(se, sf){
   
-  cov(cbind(se$mat, sf$mat), use = 'complete.obs')
+  cov(cbind(se$mat, sf$mat), use = 'pairwise.complete.obs')
 }
 
 
