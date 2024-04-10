@@ -11,7 +11,7 @@ source("R/analysis_helpers.R")
 # various conditions, no permutation ----
 
 
-resdir <- "data/graph_power4/from_cluster/240326/"
+resdir <- "data/graph_power4/from_cluster/240408_noperm/"
 
 fl <- list.files(resdir)
 
@@ -21,7 +21,8 @@ res <- tibble(run_name = str_remove(fl, "\\.csv$")) |>
   mutate(results = map(run_name,
                        read_one_res, resdir)) |>
   unnest(cols = results) |>
-  mutate(`TPR/FPR` = (literature_TPR/literature_FPR) |> replace_na(1)) |>
+  mutate(`TPR/FPR` = (literature_TPR/literature_FPR) |> replace_na(1),
+         run_name = str_replace(run_name, "knn_k10", "knn")) |>
   separate_wider_regex(run_name,
                        patterns = c("^(?:24[0-9]{4}[a-z]{0,2}_)?",
                                     run_algo = "[QUICSOglassoLME]+", "_",
@@ -1266,8 +1267,7 @@ res_perm |>
 
 #~ Selected case ----
 
-res <- qs::qread("data/graph_power4/from_cluster/final_save/240404_glasso_PSI_npnshrink_knn_k10_2_16.qs")
-
+#~ Check plots ----
 final_tib <- read_one_res("240404_glasso_PSI_npnshrink_knn_k10_2_16",
                           "data/graph_power4/from_cluster/final_save/")
 
@@ -1326,6 +1326,219 @@ final_tib |>
 
 
 
+
+# Check PSI reconstruction ----
+
+main <- qs::qread("data/graph_power4/from_cluster/archive/final_save/240404_glasso_PSI_npnshrink_knn_k10_2_16.qs")|>
+  filter(penalty == 0.3, permutation == 0)
+
+
+
+PSI_measured <- main$se_valid_u[[1]]
+PSI_estimated <- main$psi_valid_hat_u[[1]]
+
+plot(PSI_measured, PSI_estimated)
+
+tibble(measured = as.numeric(PSI_measured),
+       estimated = as.numeric(PSI_estimated)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = measured, y = estimated), alpha = .2) +
+  xlab("PSI measured") + ylab("PSI estimated")
+
+
+lm(estimated ~ measured,
+   data = tibble(measured = as.numeric(PSI_measured),
+                 estimated = as.numeric(PSI_estimated))) |>
+  summary()
+
+
+
+#~~ Compare to permuted ----
+
+permuted <- qs::qread("data/graph_power4/from_cluster/final_save/240404_glasso_PSI_npnshrink_knn_k10_2_16.qs")|>
+  filter(penalty == 0.3, permutation == 1)
+
+
+
+PSI_measured <- main$se_valid_u[[1]]
+PSI_estimated <- main$psi_valid_hat_u[[1]]
+
+plot(PSI_measured, PSI_estimated)
+
+tibble(measured = permuted$se_valid_u[[1]] |> as.numeric(),
+       estimated = permuted$psi_valid_hat_u[[1]] |> as.numeric()) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = measured, y = estimated), alpha = .2) +
+  xlab("PSI measured") + ylab("PSI estimated (from permutation)")
+
+
+
+
+#~~ For small set of events ----
+set.seed(123)
+selected_se <- sample(colnames(PSI_estimated), 10)
+
+gg_selected_noperm <- tibble(measured = as.numeric(PSI_measured[,selected_se]),
+       estimated = as.numeric(PSI_estimated[,selected_se]),
+       se_id = rep(selected_se, each = nrow(PSI_estimated))) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = measured, y = estimated, color = se_id)) +
+  xlab("PSI measured") + ylab("PSI estimated") +
+  theme(legend.position = "none")
+
+
+gg_selected_perm <- tibble(measured = permuted$se_valid_u[[1]][,selected_se] |> as.numeric(),
+       estimated = permuted$psi_valid_hat_u[[1]][,selected_se] |> as.numeric(),
+       se_id = rep(selected_se, each = nrow(PSI_estimated))) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = measured, y = estimated, color = se_id)) +
+  xlab("PSI measured") + ylab("PSI estimated (from permutation)")
+
+
+patchwork::wrap_plots(gg_selected_noperm, gg_selected_perm)
+
+
+
+
+#~ Residuals ----
+
+tib_resid <-tibble(se_id = colnames(PSI_estimated) |> rep(each = nrow(PSI_estimated)),
+                   sample_id = rownames(PSI_estimated) |> rep(times = ncol(PSI_estimated)),
+                   measured = as.numeric(PSI_measured),
+                   estimated = as.numeric(PSI_estimated)) |>
+  mutate(residual = estimated - measured)
+
+tib_resid |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = measured, y = residual), alpha = .1)
+
+#~~ break down (ordered by mean resid) ----
+tib_resid |>
+  mutate(mean_resid = mean(residual, na.rm = TRUE),
+         .by = se_id) |>
+  arrange(desc(mean_resid)) |>
+  mutate(se_id = fct_inorder(se_id)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = se_id, y = residual)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 5))
+
+tib_resid |>
+  mutate(mean_resid = mean(residual, na.rm = TRUE),
+         .by = sample_id) |>
+  arrange(desc(mean_resid)) |>
+  mutate(sample_id = fct_inorder(sample_id)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = sample_id, y = residual)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 6))
+
+
+#~~ ordered by mean abs resid ----
+tib_resid |>
+  mutate(mean_resid = mean(abs(residual), na.rm = TRUE),
+         .by = se_id) |>
+  arrange(mean_resid) |>
+  mutate(se_id = fct_inorder(se_id)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = se_id, y = residual), alpha = .1) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 5))
+
+#~~ check extremes ----
+extr_se_ids <- tib_resid |>
+  mutate(mean_resid = mean(abs(residual), na.rm = TRUE),
+         .by = se_id) |>
+  arrange(mean_resid) |>
+  mutate(se_id = fct_inorder(se_id)) |>
+  pull(se_id) |> levels() |>
+  (\(x) {n <- length(x); c(x[1:3], x[(n-2):n])})()
+
+
+tib_resid |>
+  filter(se_id %in% extr_se_ids) |>
+  mutate(se_id = factor(se_id, levels = extr_se_ids)) |>
+  ggplot() +
+  theme_classic() +
+  ggbeeswarm::geom_quasirandom(aes(x = se_id, y = residual,
+                 color = se_id, shape = se_id), alpha = .7) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_color_brewer(type = "qual", palette = 2) +
+  scale_shape_manual(values = rep(16:17, each = 3)) +
+  theme(legend.position = 'none')
+
+tib_resid |>
+  filter(se_id %in% extr_se_ids) |>
+  mutate(se_id = factor(se_id, levels = extr_se_ids)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = measured, y = residual,
+                 color = se_id, shape = se_id),
+             size = 2, alpha = .8) +
+  scale_color_brewer(type = "qual", palette = 2) +
+  scale_shape_manual(values = rep(16:17, each = 3))
+
+# same by sample
+tib_resid |>
+  mutate(mean_resid = mean(abs(residual), na.rm = TRUE),
+         .by = sample_id) |>
+  arrange(mean_resid) |>
+  mutate(sample_id = fct_inorder(sample_id)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = sample_id, y = residual)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 6))
+
+
+
+
+#~ Source of error for each metric ----
+
+#~~ Loss Frobenius ----
+
+Sts <- main$S_valid_t[[1]]
+Str <- main$S_train_hat_t[[1]]
+
+Sts[1:3,1:3]
+Str[1:3,1:3]
+
+image(Sts)
+
+
+#~~ Loss quadratic ----
+
+sum(diag( ( Sts %*na% OMtr - diag(nrow(Sts)) )^2 ))
+
+OMtr <- main$OM_train[[1]]
+
+Sts[1:3,1:3]
+OMtr[1:3,1:3]
+
+image(OMtr)
+table(OMtr)
+OMtr_nodiag <- OMtr
+diag(OMtr_nodiag) <- 0
+image(OMtr_nodiag)
+
+image(Sts %*na% OMtr)
+
+annot_df <- data.frame(type = if_else(str_detect(colnames(Sts), "^SE_[0-9]{1,4}$"),
+                               "SE",
+                               "SF"),
+                       row.names = colnames(Sts))
+
+pheatmap::pheatmap(Sts %*na% OMtr,
+                   cluster_rows = FALSE,
+                   cluster_cols = FALSE,
+                   show_rownames = FALSE,
+                   show_colnames = FALSE,
+                   annotation_row = annot_df,
+                   annotation_col = annot_df)
 
 
 

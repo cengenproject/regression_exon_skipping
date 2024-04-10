@@ -197,6 +197,10 @@ summary_metrics |>
 tib_quic_old <- read_csv("data/graph_power4/outputs/240314g_glasso_PSI_npnshrink_median_2_4.csv")
 tib_quic_new <- read_csv("data/graph_power4/outputs/240314g_SCIO_PSI_npnshrink_median_1_4.csv")
 
+tib_quic_old <- read_csv("data/graph_power4/from_cluster/archive/noperm/240327_glasso_PSI_npnshrink_knn_1_11.csv")
+tib_quic_new <- read_csv("data/graph_power4/from_cluster/archive/complete_obs/240405_glasso_PSI_npnshrink_knn_k10_1_11.csv")
+
+
 design <- "
  EF
  AB
@@ -207,9 +211,9 @@ design <- "
 
 tib_quic <- bind_rows(
   tib_quic_old |>
-    add_column(run = "glasso"),
+    add_column(run = "na"),
   tib_quic_new |>
-    add_column(run = "SCIO")
+    add_column(run = "complete")
 )
 
 
