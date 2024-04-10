@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --partition=week
+#SBATCH --partition=day
 #SBATCH --job-name=dsq_create
 #SBATCH -c 1
 #SBATCH --mem=100M
@@ -11,5 +11,5 @@ set -ue
 
 ml dSQ
 
-dsq --job-file src/240410_noperm_Scio.txt --mem 5G --time 5-23:30:00
+dsq --job-file src/240410_noperm_Scio.txt --mem 5G --time 5-23:30:00 --partition week
 
