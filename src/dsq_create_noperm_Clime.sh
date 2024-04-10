@@ -11,5 +11,5 @@ set -ue
 
 ml dSQ
 
-dsq --job-file src/240410_noperm_Scio.txt --mem 5G --time 5-23:30:00 --partition week
+dsq --job-file joblists/240410_noperm_Scio.txt --mem 5G --time 5-23:30:00 --partition week
 
