@@ -22,7 +22,7 @@ putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
   filter(keep == 1 | keep == 2) |>
   pull(gene_id)
 
-sf_expression <- read_tsv("data/export_for_arman/tx_expression.tsv.gz") |>
+sf_expression <- read_tsv("data/export_for_arman/231208_t_exp.tsv") |>
   filter(gene_id %in% putative_splice_factors) |>
   filter(sample_id %in% unique(quantifs$sample_id)) # remove RICr133, Ref, ...
 
@@ -137,10 +137,10 @@ quantifs_filtered |>
 #~ Save prefiltering ----
 
 qs::qsave(quantifs_filtered,
-          "data/graph_power4/inputs/240308_preprocessed_quantifs_filtered.qs")
+          "data/graph_power4/inputs/240410_preprocessed_quantifs_filtered.qs")
 
 qs::qsave(sf_expression,
-          "data/graph_power4/inputs/240308_preprocessed_sf_expression.qs")
+          "data/graph_power4/inputs/240410_preprocessed_sf_expression.qs")
 
 
 

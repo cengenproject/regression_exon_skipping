@@ -18,8 +18,8 @@ datadir <- "data/graph_power4/inputs/"
 
 
 #~ Load data ----
-quantifs_filtered <- qs::qread(file.path(datadir, "240308_preprocessed_quantifs_filtered.qs"))
-sf_expression <- qs::qread(file.path(datadir, "240308_preprocessed_sf_expression.qs")) |>
+quantifs_filtered <- qs::qread(file.path(datadir, "240410_preprocessed_quantifs_filtered.qs"))
+sf_expression <- qs::qread(file.path(datadir, "240410_preprocessed_sf_expression.qs")) |>
   filter(transcript_id != "R07E5.14.2")
 
 
@@ -159,7 +159,7 @@ mat_interactions_lit[is.na(mat_interactions_lit)] <- FALSE
 
 # Save preprocessed data ----
 
-save_dir <- "data/graph_power4/inputs/240314_precomputed/"
+save_dir <- "data/graph_power4/inputs/240410_precomputed/"
 
 
 qs::qsave(nb_se, file.path(save_dir, "nb_se.qs"))
