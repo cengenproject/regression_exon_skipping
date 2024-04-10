@@ -2,7 +2,7 @@
 #SBATCH --partition=week
 #SBATCH --job-name=dsq_create
 #SBATCH -c 1
-#SBATCH --mem=1G
+#SBATCH --mem=100M
 #SBATCH --time=00:02:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=alexis.weinreb@yale.edu
