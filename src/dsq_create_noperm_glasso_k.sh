@@ -11,5 +11,5 @@ set -ue
 
 ml dSQ
 
-dsq --job-file joblists/240410_noperm_glasso_k.txt --mem 20G --time 2:30:00
+dsq --job-file joblists/240415_noperm_glasso_k.txt --mem 5G --time 1:30:00
 
