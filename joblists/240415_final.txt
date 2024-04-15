@@ -1,0 +1,1 @@
+module load R; Rscript R/graph_power4_final_model.R --date '240415_final' --save --exonsInput 'PSI' --transformation 'npntrunc' --imputation 'knn' --knn_k 10 --permutations '0' --penalties 'c(10,5,1,.9,.8,.7,.6,.5,.4,.35,.3,.25,.2,.15,.1,.05)' --algo 'glasso'
