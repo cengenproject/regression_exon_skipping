@@ -11,7 +11,7 @@ source("R/analysis_helpers.R")
 # various conditions, no permutation ----
 
 
-resdir <- "data/graph_power4/from_cluster/240408_noperm/"
+resdir <- "data/graph_power4/from_cluster/240410_noperm/"
 
 fl <- list.files(resdir)
 
@@ -128,11 +128,10 @@ for(i in seq_len(nrow(by_run))){
   
   ggsave(filename = paste0(i,"_",by_run[["run_name"]][[i]],".png"),
          plot = ggplot,
-         path = "data/intermediates/240401_best_penalty_noperm/penalties_by_run",
+         path = "data/intermediates/240415_best_penalty_noperm/penalties_by_run",
          width = 18, height = 20, units = "cm")
 }
 
-manual_best_penalty <- readxl::read_excel("data/intermediates/240401_best_penalty_noperm/best_penalty.xlsx")
 
 # same penalty for each algo
 manual_best_penalty <- tibble(run_id = 1:48,
@@ -159,15 +158,21 @@ best_by_run |>
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 mat_best_by_run <- best_by_run |>
+  # filter(run_algo != "QUIC") |>
   pivot_wider(id_cols = run_name,
               names_from = "metric",
               values_from = "mean") |>
   column_to_rownames("run_name") |>
   as.matrix()
 annot_best_by_run <- best_by_run |>
+  # filter(run_algo != "QUIC") |>
   select(starts_with("run_")) |>
   distinct() |>
-  column_to_rownames("run_name")
+  column_to_rownames("run_name") |>
+  mutate(run_transformation = recode(run_transformation,
+                                     npnshrink = "NPN (shrunken)",
+                                     npntrunc = "NPN (truncated)",
+                                     zscore = "Z-score"))
 
 mat_best_by_run <- scale(mat_best_by_run)
 
@@ -179,12 +184,63 @@ mat_best_by_run[,"bias_loss_quadratic"] <- - mat_best_by_run[,"bias_loss_quadrat
 mat_best_by_run[,"literature_FPR"] <- - mat_best_by_run[,"literature_FPR"]
 
 
-pheatmap::pheatmap((mat_best_by_run),
-                   scale = "none",
-                   annotation_row = annot_best_by_run,
-                   show_rownames = FALSE,
-                   main = "Zscore, higher is better")
 
+# pheatmap::pheatmap((mat_best_by_run[,more_useful_metrics]),
+#                    scale = "none",
+#                    annotation_row = annot_best_by_run,
+#                    show_rownames = FALSE,
+#                    main = "Zscore, higher is better")
+# 
+# 
+# pheatmap::pheatmap((mat_best_by_run[,more_useful_metrics]),
+#                    scale = "none",
+#                    annotation_row = annot_best_by_run |>
+#                      select(imputation = run_imputation,
+#                             transformation = run_transformation,
+#                             input = run_exonsInput,
+#                             algorithm = run_algo),
+#                    show_rownames = FALSE,
+#                    main = "Zscore, higher is better")
+# 
+# 
+# ComplexHeatmap::pheatmap(mat_best_by_run[,more_useful_metrics],
+#                          annotation_row = annot_best_by_run |>
+#                            select(imputation = run_imputation,
+#                                   transformation = run_transformation,
+#                                   input = run_exonsInput,
+#                                   algorithm = run_algo),
+#                          cluster_cols = FALSE,
+#                          show_rownames = FALSE)
+
+
+row_annot <- ComplexHeatmap::HeatmapAnnotation(
+  df = annot_best_by_run |>
+    select(algorithm = run_algo,
+           `input format` = run_exonsInput,
+           imputation = run_imputation,
+           transformation = run_transformation),
+  which = "row",
+  col =  list(algorithm = c(CLIME = '#C2AD4B', glasso = '#418C82',
+                            QUIC = '#00BCBD', SCIO = '#C55E2D'),
+              `input format` = c(counts = "#7fc97f", PSI = "#beaed4"),
+              imputation = c(knn = "#b3cde3", median = "#ccebc5"),
+              transformation = c(`NPN (shrunken)` = "#dfc27d",
+                                 `NPN (truncated)` = "#a6611a",
+                                 `Z-score` = "#80cdc1"))
+)
+
+ComplexHeatmap::Heatmap(mat_best_by_run[,more_useful_metrics],
+                        left_annotation = row_annot,
+                        show_row_names = FALSE,
+                        cluster_columns = FALSE,
+                        column_labels = c("Frobenius loss", "Quadratic loss",
+                                          "R squared", "Fraction Explained Variance",
+                                          "TPR / FPR", "Power Law"),
+                        name = "Z-score")
+
+pdf("presentations/240308_figures/heatmap.pdf",
+    width = 8, height = 8)
+dev.off()
 
 for(.metric in unique(best_by_run$metric)){
   gg <- best_by_run |>
@@ -199,7 +255,7 @@ for(.metric in unique(best_by_run$metric)){
   
   ggsave(paste0(.metric, ".png"),
          plot = gg,
-         path = "data/intermediates/240401_best_penalty_noperm/runs_by_metric",
+         path = "data/intermediates/240415_best_penalty_noperm/runs_by_metric",
          width = 15, height = 15, units = "cm")
 }
 
@@ -219,546 +275,552 @@ ggsave("runs_by_metric.png",
 
 
 
-#> Proceed by elimination: First pass ----
-#> 
-#> First, loss Frobenius: Zscore does terrible.
-#> 
+# Old version: keeping because can be more readable ----
+
+# #> Proceed by elimination: First pass ---
+# #> 
+# #> First, loss Frobenius: Zscore does terrible.
+# #> 
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_algo)) +
+#   theme_classic() +
+#   facet_grid(rows = vars(run_exonsInput, run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Frobenius (log)") + xlab("Penalty (log)")
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_quadratic") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_algo)) +
+#   theme_classic() +
+#   facet_grid(rows = vars(run_exonsInput, run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Quadratic (log)") + xlab("Penalty (log)")
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "Rsquared") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_algo)) +
+#   theme_classic() +
+#   facet_grid(rows = vars(run_exonsInput, run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Rsquare") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "mean_FEV") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_algo)) +
+#   theme_classic() +
+#   facet_grid(rows = vars(run_exonsInput, run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("FEV") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "TPR/FPR") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput, run_imputation),
+#              cols = vars(run_transformation),
+#              scales = "free_y") +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("TPR/FPR") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "power_law") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput, run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Power law") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# 
+# #> Second pass ---
+# #> Eliminate SCIO and Zscore
+# #> Focus on imputation method
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_imputation, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Frobenius") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_quadratic") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_imputation, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Quadratic (log)") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "Rsquared") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_imputation, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("R squared") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "mean_FEV") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_imputation, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("FEV") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "TPR/FPR") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_imputation, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .05) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   scale_y_continuous(limits = c(0,10), oob = scales::oob_keep) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("TPR/FPR") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "power_law") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_imputation, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_exonsInput),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Power law") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# 
+# 
+# 
+# 
+# #> Third pass ---
+# #> Focus on exonsInput method
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_exonsInput, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Frobenius") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_quadratic") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_exonsInput, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Quadratic (log)") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "Rsquared") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_exonsInput, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("R squared") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "mean_FEV") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_exonsInput, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("FEV") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "TPR/FPR") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_exonsInput, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .03) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   scale_y_continuous(limits = c(0,10), oob = scales::oob_keep) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("TPR/FPR") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "power_law") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_exonsInput, color = run_algo)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Power law") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# 
+# #> Fourth pass ---
+# #> Focus on transformation method
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo == "glasso") |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_transformation)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_exonsInput)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Frobenius") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo == "glasso") |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_quadratic") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_transformation)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_exonsInput)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Quadratic") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo == "glasso") |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "Rsquared") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_transformation)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_exonsInput)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("R squared") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo == "glasso") |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "mean_FEV") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_transformation)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_exonsInput)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("FEV") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo == "glasso") |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "TPR/FPR") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_transformation)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_exonsInput)) +
+#   geom_line() +
+#   geom_errorbar(width = .03) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   scale_y_continuous(limits = c(0,4), oob = scales::oob_keep) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("TPR/FPR") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo == "glasso") |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "power_law") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_transformation)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_exonsInput)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10(limits = c(.04, .9)) +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Power law") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
 
 
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_frobenius") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_algo)) +
-  theme_classic() +
-  facet_grid(rows = vars(run_exonsInput, run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Frobenius (log)") + xlab("Penalty (log)")
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_quadratic") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_algo)) +
-  theme_classic() +
-  facet_grid(rows = vars(run_exonsInput, run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Quadratic (log)") + xlab("Penalty (log)")
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "Rsquared") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_algo)) +
-  theme_classic() +
-  facet_grid(rows = vars(run_exonsInput, run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Rsquare") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "mean_FEV") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_algo)) +
-  theme_classic() +
-  facet_grid(rows = vars(run_exonsInput, run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("FEV") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "TPR/FPR") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput, run_imputation),
-             cols = vars(run_transformation),
-             scales = "free_y") +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("TPR/FPR") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "power_law") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput, run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Power law") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-
-
-#> Second pass ----
-#> Eliminate SCIO and Zscore
-#> Focus on imputation method
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_frobenius") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_imputation, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Frobenius") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_quadratic") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_imputation, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Quadratic (log)") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "Rsquared") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_imputation, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("R squared") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "mean_FEV") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_imputation, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("FEV") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "TPR/FPR") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_imputation, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .05) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  scale_y_continuous(limits = c(0,10), oob = scales::oob_keep) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("TPR/FPR") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "power_law") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_imputation, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_exonsInput),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Power law") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-
-
-
-
-
-#> Third pass ----
-#> Focus on exonsInput method
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_frobenius") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_exonsInput, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Frobenius") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_quadratic") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_exonsInput, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Quadratic (log)") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "Rsquared") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_exonsInput, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("R squared") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "mean_FEV") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_exonsInput, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("FEV") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "TPR/FPR") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_exonsInput, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .03) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  scale_y_continuous(limits = c(0,10), oob = scales::oob_keep) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("TPR/FPR") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "power_law") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             shape = run_exonsInput, color = run_algo)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_transformation)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Power law") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-
-#> Fourth pass ----
-#> Focus on transformation method
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo == "glasso") |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_frobenius") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_transformation)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_exonsInput)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Frobenius") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo == "glasso") |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "loss_quadratic") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_transformation)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_exonsInput)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Loss Quadratic") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo == "glasso") |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "Rsquared") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_transformation)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_exonsInput)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("R squared") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo == "glasso") |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "mean_FEV") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_transformation)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_exonsInput)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10() +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("FEV") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo == "glasso") |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "TPR/FPR") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_transformation)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_exonsInput)) +
-  geom_line() +
-  geom_errorbar(width = .03) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  scale_y_continuous(limits = c(0,4), oob = scales::oob_keep) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("TPR/FPR") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
-
-res_noperm |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  mutate(metric = factor(metric, levels = metr_levels)) |>
-  filter(run_transformation != "zscore", run_algo == "glasso") |>
-  mutate(ymin = pmax(0, mean - sd),
-         ymax = mean + sd) |>
-  filter(metric == "power_law") |>
-  ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
-             color = run_transformation)) +
-  theme_bw() +
-  facet_grid(rows = vars(run_imputation),
-             cols = vars(run_exonsInput)) +
-  geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  scale_x_log10(limits = c(.04, .9)) +
-  # scale_y_log10(oob = scales::oob_keep) +
-  ylab("Power law") + xlab("Penalty (log)") +
-  theme(legend.position = "none")
 
 
 
 # knn k ----
 
 
-resdirknn <- "data/graph_power4/from_cluster/240403_reknn/"
+resdirknn <- "data/graph_power4/from_cluster/240415_knn/"
 
 flknn <- list.files(resdirknn)
 
@@ -927,31 +989,6 @@ res_knn |>
 
 
 
-#> Sixth pass ----
-#> 
-#> Selected at fixed penalty
-
-
-
-res_knn |>
-  select(-c(results, summary_by_sparsity)) |>
-  unnest(cols = summary_by_penalty) |>
-  filter(penalty == .3,
-         run_k == 10,
-         ! startsWith(metric, "literature"),
-         metric != "sparsity") |>
-  ggplot(aes(x = run_transformation, y = mean, ymin = mean - sd, ymax = mean + sd,
-             color = run_transformation)) +
-  theme_classic() +
-  facet_wrap(~metric, scales = "free_y") +
-  # ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
-  # geom_line() +
-  geom_errorbar(width = .1) +
-  geom_point() +
-  # scale_x_log10() +
-  ylab(NULL) + xlab("Metric")
-
-
 
 
 
@@ -970,23 +1007,6 @@ design <- "
  JH
 "
 
-
-res_knn |>
-  select(-c(results, summary_by_penalty)) |>
-  unnest(cols = summary_by_sparsity) |>
-  filter(run_transformation == "npnshrink") |>
-  ggplot(aes(x = 100*(1-sparsity_mean),
-             y = mean,
-             ymin = mean - sd,
-             ymax = mean + sd,
-             color = run_k)) +
-  theme_classic() +
-  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
-  # facet_wrap(~metric) +
-  geom_line() +
-  geom_errorbar(width = .2) +
-  geom_point() +
-  ylab(NULL) + xlab("Sparsity (%)")
 
 res_knn |>
   select(-c(results, summary_by_penalty)) |>
@@ -1013,7 +1033,7 @@ res_knn |>
 # Final with Permutations ----
 
 
-resdirfin <- "data/graph_power4/from_cluster/final_perm/"
+resdirfin <- "data/graph_power4/from_cluster/240415_perm/"
 
 flfin <- list.files(resdirfin)
 
@@ -1069,8 +1089,8 @@ if(identical(
 
 # check p-val distribution
 resfin |>
-  filter(run_algo == "glasso", run_exonsInput == "PSI",
-         run_transformation == "npnshrink", run_imputation=="knn") |>
+  # filter(run_algo == "glasso", run_exonsInput == "PSI",
+  #        run_transformation == "npntr", run_imputation=="knn") |>
   unnest(results) |>
   # filter(penalty == 0.3, fold == 2) |>
   nest(.by = starts_with("run_")) |>
@@ -1111,7 +1131,7 @@ for(metr in unique(res_perm$summary_by_penalty[[1]]$metric)){
     theme(legend.position = "none")
   
   ggsave(paste0("pval_", metr, ".png"), plot = gg,
-         path = "data/intermediates/240404_perm/",
+         path = "data/intermediates/240415_perm/",
          width = 12, height = 7, units = "cm")
   
 }
@@ -1262,14 +1282,18 @@ res_perm |>
   scale_color_manual(values = c("grey", 'red4')) +
   theme(legend.position = 'none')
 
+# ggsave("presentations/240308_figures/permutations.pdf",
+#        width = 15, height = 20, units = "cm")
+
+
 
 
 
 #~ Selected case ----
 
 #~ Check plots ----
-final_tib <- read_one_res("240404_glasso_PSI_npnshrink_knn_k10_2_16",
-                          "data/graph_power4/from_cluster/final_save/")
+final_tib <- read_one_res("240415_final_glasso_PSI_npntrunc_knn_k10_2_16",
+                          "data/graph_power4/from_cluster/240415_final")
 
 # One with and one without permutations
 final_tib$permutation |> table()
@@ -1328,23 +1352,19 @@ final_tib |>
 
 
 # Check PSI reconstruction ----
+all_qs <- qs::qread("data/graph_power4/from_cluster/240415_final/240415_final_glasso_PSI_npntrunc_knn_k10_2_16.qs")
 
-main <- qs::qread("data/graph_power4/from_cluster/archive/final_save/240404_glasso_PSI_npnshrink_knn_k10_2_16.qs")|>
+main <- all_qs |>
   filter(penalty == 0.3, permutation == 0)
 
+permuted <- all_qs |>
+  filter(penalty == 0.3, permutation == 1)
 
 
 PSI_measured <- main$se_valid_u[[1]]
 PSI_estimated <- main$psi_valid_hat_u[[1]]
 
 plot(PSI_measured, PSI_estimated)
-
-tibble(measured = as.numeric(PSI_measured),
-       estimated = as.numeric(PSI_estimated)) |>
-  ggplot() +
-  theme_classic() +
-  geom_point(aes(x = measured, y = estimated), alpha = .2) +
-  xlab("PSI measured") + ylab("PSI estimated")
 
 
 lm(estimated ~ measured,
@@ -1354,25 +1374,42 @@ lm(estimated ~ measured,
 
 
 
-#~~ Compare to permuted ----
+# Compare to permuted 
 
-permuted <- qs::qread("data/graph_power4/from_cluster/final_save/240404_glasso_PSI_npnshrink_knn_k10_2_16.qs")|>
-  filter(penalty == 0.3, permutation == 1)
+PSI_measured_perm <- permuted$se_valid_u[[1]]
+PSI_estimated_perm <- permuted$psi_valid_hat_u[[1]]
+
+plot(PSI_measured_perm, PSI_estimated_perm)
+
+
+lm(estimated ~ measured,
+   data = tibble(measured = as.numeric(PSI_measured_perm),
+                 estimated = as.numeric(PSI_estimated_perm))) |>
+  summary()
 
 
 
-PSI_measured <- main$se_valid_u[[1]]
-PSI_estimated <- main$psi_valid_hat_u[[1]]
-
-plot(PSI_measured, PSI_estimated)
-
-tibble(measured = permuted$se_valid_u[[1]] |> as.numeric(),
-       estimated = permuted$psi_valid_hat_u[[1]] |> as.numeric()) |>
+# plot both
+tibble(
+  measured = c(
+    as.numeric(main$se_valid_u[[1]]),
+    as.numeric(permuted$se_valid_u[[1]])
+  ),
+  estimated = c(
+    as.numeric(main$psi_valid_hat_u[[1]]),
+    as.numeric(permuted$psi_valid_hat_u[[1]])
+  ),
+  permuted = rep(c("no", "yes"),
+                 times = c(
+                   length(as.numeric(main$se_valid_u[[1]])),
+                   length(as.numeric(permuted$se_valid_u[[1]]))
+                 ))
+) |>
   ggplot() +
   theme_classic() +
   geom_point(aes(x = measured, y = estimated), alpha = .2) +
-  xlab("PSI measured") + ylab("PSI estimated (from permutation)")
-
+  facet_wrap(~permuted) +
+  xlab("PSI measured") + ylab("PSI estimated")
 
 
 
@@ -1380,9 +1417,9 @@ tibble(measured = permuted$se_valid_u[[1]] |> as.numeric(),
 set.seed(123)
 selected_se <- sample(colnames(PSI_estimated), 10)
 
-gg_selected_noperm <- tibble(measured = as.numeric(PSI_measured[,selected_se]),
-       estimated = as.numeric(PSI_estimated[,selected_se]),
-       se_id = rep(selected_se, each = nrow(PSI_estimated))) |>
+gg_selected_noperm <- tibble(measured = as.numeric(main$se_valid_u[[1]][,selected_se]),
+                             estimated = as.numeric(main$psi_valid_hat_u[[1]][,selected_se]),
+                             se_id = rep(selected_se, each = nrow(main$se_valid_u[[1]]))) |>
   ggplot() +
   theme_classic() +
   geom_point(aes(x = measured, y = estimated, color = se_id)) +
@@ -1391,8 +1428,8 @@ gg_selected_noperm <- tibble(measured = as.numeric(PSI_measured[,selected_se]),
 
 
 gg_selected_perm <- tibble(measured = permuted$se_valid_u[[1]][,selected_se] |> as.numeric(),
-       estimated = permuted$psi_valid_hat_u[[1]][,selected_se] |> as.numeric(),
-       se_id = rep(selected_se, each = nrow(PSI_estimated))) |>
+                           estimated = permuted$psi_valid_hat_u[[1]][,selected_se] |> as.numeric(),
+                           se_id = rep(selected_se, each = nrow(permuted$se_valid_u[[1]]))) |>
   ggplot() +
   theme_classic() +
   geom_point(aes(x = measured, y = estimated, color = se_id)) +
@@ -1466,7 +1503,7 @@ tib_resid |>
   ggplot() +
   theme_classic() +
   ggbeeswarm::geom_quasirandom(aes(x = se_id, y = residual,
-                 color = se_id, shape = se_id), alpha = .7) +
+                                   color = se_id, shape = se_id), alpha = .7) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
   scale_color_brewer(type = "qual", palette = 2) +
   scale_shape_manual(values = rep(16:17, each = 3)) +
@@ -1509,6 +1546,38 @@ Str[1:3,1:3]
 
 image(Sts)
 
+image(permuted$S_valid_t[[1]])
+
+opar <- par()
+
+par(mfrow = c(1,2))
+image(main$S_valid_t[[1]], main = "S test")
+image(permuted$S_valid_t[[1]], main = "S test (permuted)")
+par(opar)
+
+
+# loss Frobenius on adjacency
+
+is_se <- startsWith(colnames(all_qs$S_valid_t[[1]]), "SE_")
+is_sf <- !startsWith(colnames(all_qs$S_valid_t[[1]]), "SE_")
+
+
+
+loss_frob_adj <- function(Sts, Str){
+  adj_test <- Sts[is_se, is_sf]
+  adj_train <- Str[is_se, is_sf]
+  
+  sqrt(sum( (adj_test - adj_train)^2 ))
+}
+
+all_qs$loss_frobenius_adj <- map2_dbl(all_qs$S_valid_t,
+                                    all_qs$S_train_hat_t,
+                                    loss_frob_adj)
+
+plot(all_qs$penalty, all_qs$loss_frobenius_adj, col = c("red4","green4")[1+all_qs[["permutation"]]])
+plot(all_qs$penalty, all_qs$loss_frobenius, col = c("red4","green4")[1+all_qs[["permutation"]]])
+
+
 
 #~~ Loss quadratic ----
 
@@ -1528,8 +1597,8 @@ image(OMtr_nodiag)
 image(Sts %*na% OMtr)
 
 annot_df <- data.frame(type = if_else(str_detect(colnames(Sts), "^SE_[0-9]{1,4}$"),
-                               "SE",
-                               "SF"),
+                                      "SE",
+                                      "SF"),
                        row.names = colnames(Sts))
 
 pheatmap::pheatmap(Sts %*na% OMtr,
