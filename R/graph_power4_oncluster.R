@@ -244,6 +244,15 @@ res_quic$bias_loss_quadratic = map2_dbl(res_quic$S_train_t,
                                         loss_quad)
 
 
+res_quic$loss_frobenius_adj = map2_dbl(res_quic$S_valid_t,
+                                       res_quic$S_train_hat_t,
+                                       loss_frob_adj)
+
+res_quic$bias_loss_frobenius_adj = map2_dbl(res_quic$S_train_t,
+                                            res_quic$S_train_hat_t,
+                                            loss_frob_adj)
+
+
 #~~ reconstruction ----
 res_quic$Rsquared <- map2_dbl(res_quic$psi_valid_u,
                               res_quic$psi_valid_hat_u,
@@ -294,6 +303,7 @@ message("Saving as, ", out_name, " at ", date())
 res_quic |>
   dplyr::select(penalty, fold, permutation, Rsquared,
                 mean_FEV, loss_frobenius, loss_quadratic,
+                loss_frobenius_adj, bias_loss_frobenius_adj,
                 bias_loss_frobenius, bias_loss_quadratic,
                 literature_TPR, literature_FPR, power_law, sparsity) |>
   readr::write_csv(file.path(outdir,

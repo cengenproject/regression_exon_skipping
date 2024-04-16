@@ -120,8 +120,8 @@ design <- "
 summary_metrics |>
   ggplot(aes(x = sparsity, y = mean, ymin = mean - sd, ymax = mean + sd)) +
   theme_classic() +
-  # facet_wrap(~metric) +
-  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  facet_wrap(~metric, scales = "free_y") +
+  # ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
   geom_line() +
   geom_errorbar(width = .1) +
   geom_point() +

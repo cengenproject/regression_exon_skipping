@@ -270,6 +270,24 @@ extract_adj_mat <- function(OM){
 
 
 
+loss_frob_adj <- function(Sts, Str){
+  stopifnot(all(
+    nrow(Sts) == nrow(Str),
+    nrow(Sts) == ncol(Str),
+    ncol(Sts) == nrow(Sts),
+    identical(rownames(Sts), rownames(Str)),
+    identical(colnames(Sts), colnames(Str))
+  ))
+  
+  adj_test <- Sts[startsWith(rownames(Sts), "SE_"),
+                  !startsWith(colnames(Sts), "SE_")]
+  
+  adj_train <- Str[startsWith(rownames(Str), "SE_"),
+                   !startsWith(colnames(Str), "SE_")]
+  
+  
+  sqrt(sum( (adj_test - adj_train)^2 ))
+}
 
 
 
