@@ -1130,8 +1130,8 @@ res_knn |>
   ylab(NULL) + xlab("k") +
   theme(legend.position = "none")
 
-ggsave("knn.pdf", path = "presentations/240308_figures/",
-       width = 12, height = 17, units = "cm")
+# ggsave("knn.pdf", path = "presentations/240308_figures/",
+#        width = 12, height = 17, units = "cm")
 
 
 
@@ -1171,7 +1171,7 @@ res_knn |>
 # Final with Permutations ----
 
 
-resdirfin <- "data/graph_power4/from_cluster/240415_perm/"
+resdirfin <- "data/graph_power4/from_cluster/240426_perm/"
 
 flfin <- list.files(resdirfin)
 
@@ -1252,6 +1252,7 @@ res_perm <- resfin |>
 
 # Plot individual metrics permutations ----
 
+
 for(metr in unique(res_perm$summary_by_penalty[[1]]$metric)){
   gg <- resfin |>
     unnest(results) |>
@@ -1268,13 +1269,70 @@ for(metr in unique(res_perm$summary_by_penalty[[1]]$metric)){
     scale_size_manual(values = c(0.5,1.5)) +
     theme(legend.position = "none")
   
-  ggsave(paste0("pval_", metr, ".png"), plot = gg,
-         path = "data/intermediates/240415_perm/",
-         width = 12, height = 7, units = "cm")
+  # ggsave(paste0("pval_", metr, ".png"), plot = gg,
+  #        path = "data/intermediates/240426_perm/",
+  #        width = 12, height = 7, units = "cm")
   
 }
 
-gg
+# For fig Suppl: against sparsity, show all permutations ----
+
+design <- "
+A#
+B#
+CD
+"
+
+toplot <- resfin |>
+  unnest(results) |>
+  select(-c(starts_with("run_"), fold)) |>
+  pivot_longer(-c(penalty, permutation),
+               names_to = "metric",
+               values_to = "value") |>
+  filter(metric %in% more_useful_metrics) |>
+  mutate(permuted = if_else(permutation == 0,
+                              "non permuted",
+                              "permutation") |>
+           factor(levels = c("permutation", "non permuted"))) |>
+  mutate(metric = factor(metric, levels = more_useful_metrics),
+         metric = recode_factor(metric,
+                                "loss_frobenius_adj" = "Frobenius loss",
+                                "mean_FEV" = "Fraction\nExplained Variance",
+                                "TPR/FPR" = "TPR / FPR",
+                                "power_law" = "Power Law"))
+
+ggplot(toplot |> filter(permuted == "permutation")) +
+  theme_bw() +
+  ggbeeswarm::geom_quasirandom(aes(x = penalty,
+                                   y = value,
+                                   color = permuted,
+                                   # alpha = permuted,
+                                   size = permuted,
+                                   shape = permuted)) +
+  ggbeeswarm::geom_quasirandom(aes(x = penalty,
+                                   y = value,
+                                   color = permuted,
+                                   # alpha = permuted,
+                                   size = permuted,
+                                   shape = permuted),
+                               data = toplot |> filter(permuted == "non permuted")) +
+  scale_x_log10() +
+  ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
+  # scale_alpha_manual(values = c(0.05,1)) +
+  scale_size_manual(values = c(0.5,1.5)) +
+  scale_color_manual(values = c("grey80", "darkred")) +
+  theme(legend.position = "inside",
+        legend.position.inside = c(.8,.8)) +
+  ylab(NULL) +
+  aes(group=rev(permuted))
+
+
+# ggsave("presentations/240308_figures/permutations_points.pdf",
+#        width = 15, height = 20, units = "cm")
+
+
+
+
 
 
 
