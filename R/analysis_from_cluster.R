@@ -11,7 +11,7 @@ source("R/analysis_helpers.R")
 # various conditions, no permutation ----
 
 
-resdir <- "data/graph_power4/from_cluster/240410_noperm/"
+resdir <- "data/graph_power4/from_cluster/240416_noperm/"
 
 fl <- list.files(resdir)
 
@@ -44,6 +44,7 @@ res_noperm <- res |>
 
 
 metr_levels <- c("loss_frobenius", "loss_quadratic",
+                 "loss_frobenius_adj", "bias_loss_frobenius_adj",
                  "bias_loss_frobenius", "bias_loss_quadratic",
                  "Rsquared", "mean_FEV",
                  "literature_TPR", "literature_FPR",
@@ -128,7 +129,7 @@ for(i in seq_len(nrow(by_run))){
   
   ggsave(filename = paste0(i,"_",by_run[["run_name"]][[i]],".png"),
          plot = ggplot,
-         path = "data/intermediates/240415_best_penalty_noperm/penalties_by_run",
+         path = "data/intermediates/240426_best_penalty_noperm/penalties_by_run",
          width = 18, height = 20, units = "cm")
 }
 
@@ -178,6 +179,7 @@ mat_best_by_run <- scale(mat_best_by_run)
 
 # ensure higher is better
 mat_best_by_run[,"loss_frobenius"] <- - mat_best_by_run[,"loss_frobenius"]
+mat_best_by_run[,"loss_frobenius_adj"] <- - mat_best_by_run[,"loss_frobenius_adj"]
 mat_best_by_run[,"loss_quadratic"] <- - mat_best_by_run[,"loss_quadratic"]
 mat_best_by_run[,"bias_loss_frobenius"] <- - mat_best_by_run[,"bias_loss_frobenius"]
 mat_best_by_run[,"bias_loss_quadratic"] <- - mat_best_by_run[,"bias_loss_quadratic"]
@@ -229,12 +231,17 @@ row_annot <- ComplexHeatmap::HeatmapAnnotation(
                                  `Z-score` = "#80cdc1"))
 )
 
+
+more_useful_metrics <- c("loss_frobenius_adj",
+                         "mean_FEV",
+                         "TPR/FPR", "power_law")
+
 ComplexHeatmap::Heatmap(mat_best_by_run[,more_useful_metrics],
                         left_annotation = row_annot,
                         show_row_names = FALSE,
                         cluster_columns = FALSE,
-                        column_labels = c("Frobenius loss", "Quadratic loss",
-                                          "R squared", "Fraction Explained Variance",
+                        column_labels = c("Frobenius loss\n(inverted)",
+                                          "Fraction\nExplained Variance",
                                           "TPR / FPR", "Power Law"),
                         name = "Z-score")
 
@@ -253,10 +260,10 @@ for(.metric in unique(best_by_run$metric)){
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     ggtitle(.metric)
   
-  ggsave(paste0(.metric, ".png"),
-         plot = gg,
-         path = "data/intermediates/240415_best_penalty_noperm/runs_by_metric",
-         width = 15, height = 15, units = "cm")
+  # ggsave(paste0(.metric, ".png"),
+  #        plot = gg,
+  #        path = "data/intermediates/240415_best_penalty_noperm/runs_by_metric",
+  #        width = 15, height = 15, units = "cm")
 }
 
 
@@ -269,9 +276,9 @@ best_by_run |>
   theme(axis.text.x = element_blank()) +
   scale_y_log10()
 
-ggsave("runs_by_metric.png",
-       path = "data/intermediates/240401_best_penalty_noperm/runs_by_metric/",
-       width = 18, height = 35, units = "cm")
+# ggsave("runs_by_metric.png",
+#        path = "data/intermediates/240401_best_penalty_noperm/runs_by_metric/",
+#        width = 18, height = 35, units = "cm")
 
 
 
@@ -322,6 +329,28 @@ ggsave("runs_by_metric.png",
 #   scale_y_log10(oob = scales::oob_keep) +
 #   ylab("Loss Quadratic (log)") + xlab("Penalty (log)")
 # 
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius_adj") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_algo)) +
+#   theme_classic() +
+#   facet_grid(rows = vars(run_exonsInput, run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Frob adjacency") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+
 # 
 # res_noperm |>
 #   select(-c(results, summary_by_sparsity)) |>
@@ -463,6 +492,28 @@ ggsave("runs_by_metric.png",
 #   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
 #   mutate(ymin = pmax(0, mean - sd),
 #          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius_adj") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_imputation, color = run_algo)) +
+#   theme_classic() +
+#   facet_grid(rows = vars(run_exonsInput),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Frob adjacency") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
 #   filter(metric == "Rsquared") |>
 #   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
 #              shape = run_imputation, color = run_algo)) +
@@ -592,6 +643,28 @@ ggsave("runs_by_metric.png",
 #   ylab("Loss Quadratic (log)") + xlab("Penalty (log)") +
 #   theme(legend.position = "none")
 # 
+# 
+# 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo %in% c("glasso", "CLIME")) |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius_adj") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              shape = run_exonsInput, color = run_algo)) +
+#   theme_classic() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_transformation)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Frob adjacency") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
 # 
 # res_noperm |>
 #   select(-c(results, summary_by_sparsity)) |>
@@ -726,6 +799,27 @@ ggsave("runs_by_metric.png",
 #   ylab("Loss Quadratic") + xlab("Penalty (log)") +
 #   theme(legend.position = "none")
 # 
+# res_noperm |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   mutate(metric = factor(metric, levels = metr_levels)) |>
+#   filter(run_transformation != "zscore", run_algo == "glasso") |>
+#   mutate(ymin = pmax(0, mean - sd),
+#          ymax = mean + sd) |>
+#   filter(metric == "loss_frobenius_adj") |>
+#   ggplot(aes(x = penalty, y = mean, ymin = ymin, ymax = ymax,
+#              color = run_transformation)) +
+#   theme_bw() +
+#   facet_grid(rows = vars(run_imputation),
+#              cols = vars(run_exonsInput)) +
+#   geom_line() +
+#   geom_errorbar(width = .1) +
+#   geom_point() +
+#   scale_x_log10() +
+#   # scale_y_log10(oob = scales::oob_keep) +
+#   ylab("Loss Quadratic") + xlab("Penalty (log)") +
+#   theme(legend.position = "none")
+# 
 # 
 # res_noperm |>
 #   select(-c(results, summary_by_sparsity)) |>
@@ -820,7 +914,7 @@ ggsave("runs_by_metric.png",
 # knn k ----
 
 
-resdirknn <- "data/graph_power4/from_cluster/240415_knn/"
+resdirknn <- "data/graph_power4/from_cluster/240415_knn2/"
 
 flknn <- list.files(resdirknn)
 
@@ -899,6 +993,26 @@ res_knn |>
   # scale_y_log10(oob = scales::oob_keep) +
   ylab("Loss Quadratic") + xlab("k") +
   theme(legend.position = "none")
+
+res_knn |>
+  select(-c(results, summary_by_sparsity)) |>
+  unnest(cols = summary_by_penalty) |>
+  mutate(run_k = as.integer(run_k),
+         penalty = as.factor(penalty)) |>
+  mutate(ymin = pmax(0, mean - sd),
+         ymax = mean + sd) |>
+  filter(metric == "loss_frobenius_adj",
+         penalty == .2 | penalty == .3) |>
+  ggplot(aes(x = run_k, y = mean, ymin = ymin, ymax = ymax,
+             color = penalty, shape = penalty)) +
+  theme_classic() +
+  facet_grid(rows = vars(run_transformation)) +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  geom_line() +
+  # scale_x_log10() +
+  # scale_y_log10(oob = scales::oob_keep) +
+  ylab("Loss Frobenius") + xlab("k")
 
 
 res_knn |>
@@ -989,11 +1103,35 @@ res_knn |>
 
 
 
+#~ plot knn vs k ----
 
+res_knn |>
+  select(-c(results, summary_by_sparsity)) |>
+  unnest(cols = summary_by_penalty) |>
+  mutate(run_k = as.integer(run_k),
+         penalty = as.factor(penalty)) |>
+  mutate(ymin = pmax(0, mean - sd),
+         ymax = mean + sd) |>
+  filter(metric %in% more_useful_metrics,
+         penalty == .2) |>
+  mutate(metric = factor(metric, levels = more_useful_metrics),
+         metric = recode_factor(metric,
+                    "loss_frobenius_adj" = "Frobenius loss",
+                    "mean_FEV" = "Fraction\nExplained Variance",
+                    "TPR/FPR" = "TPR / FPR",
+                    "power_law" = "Power Law")) |>
+  ggplot(aes(x = run_k, y = mean, ymin = ymin, ymax = ymax)) +
+  theme_bw() +
+  facet_grid(rows = vars(metric), scales = "free_y") +
+  geom_line() +
+  geom_errorbar(width = .1) +
+  geom_point() +
+  geom_vline(aes(xintercept = 4), linewidth = 5, alpha = .2) +
+  ylab(NULL) + xlab("k") +
+  theme(legend.position = "none")
 
-
-
-
+ggsave("knn.pdf", path = "presentations/240308_figures/",
+       width = 12, height = 17, units = "cm")
 
 
 
