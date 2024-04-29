@@ -7,7 +7,7 @@
 # However, the results of `filter_PSI_and_TPM.R` are NOT used here
 
 #re-run (minor adaptations) 240308 for bsn12 new dataset
-
+# 240429: use all RBPs in addition to putative SFs
 
 # Prefilter ----
 
@@ -18,16 +18,55 @@ quantifs <- read_tsv("../quantif_exon_skipping/data/export_for_arman/240308_PSI_
   filter(! is.na(PSI)) |>
   filter(startsWith(event_id, "SE_"))
 
-putative_splice_factors <- wormDatasets::worm_putative_splice_factors |>
-  filter(keep == 1 | keep == 2) |>
-  pull(gene_id)
+
+eulerr::euler(list(
+  putative_sf = wormDatasets::worm_putative_splice_factors |> filter(keep == 1 | keep == 2) |> pull(gene_id),
+  tamburino = wormDatasets::list_rbp_tamburino2013$gene_id,
+  matiagonzalez = wormDatasets::list_rbp_matiagonzalez2015 |> filter(selected == 1) |> pull(gene_id)
+)) |>
+  plot()
+
+putative_splice_factors <- union(
+  wormDatasets::worm_putative_splice_factors |> filter(keep == 1 | keep == 2) |> pull(gene_id),
+  wormDatasets::list_rbp_tamburino2013$gene_id) |>
+  union(wormDatasets::list_rbp_matiagonzalez2015 |> filter(selected == 1) |> pull(gene_id))
+
+
 
 sf_expression <- read_tsv("data/export_for_arman/231208_t_exp.tsv") |>
   filter(gene_id %in% putative_splice_factors) |>
   filter(sample_id %in% unique(quantifs$sample_id)) # remove RICr133, Ref, ...
 
 
+# filter SF expression ----
 
+# load Alec's sc-bulk integration
+gene_expression <- read.csv("../quantif_exon_skipping/data/thresholded_gene_expression/bsn12_subtracted_integrated_binarized_expression_withVDDD_FDR0.05_030424.tsv",
+                            sep = "\t") |>
+  rownames_to_column("gene_id") |>
+  pivot_longer(-gene_id,
+               names_to = "neuron_id",
+               values_to = "expression")
+
+sf_expression |>
+  left_join(gene_expression,
+            by = c("gene_id", "neuron_id")) |>
+  ggplot() +
+  theme_classic() +
+  geom_violin(aes(x = factor(expression), y = log10(TPM + 1)))
+
+noneur <- unique(sf_expression$gene_id)[!unique(sf_expression$gene_id) %in% wormDatasets::genes_by_pattern$present_in_neurons]
+
+sf_expression |>
+  mutate(nonneur = gene_id %in% noneur) |>
+  ggplot() +theme_classic() +
+  geom_density(aes(x = log10(TPM +1), fill = nonneur), alpha = .2)
+
+sf_expression |>
+  mutate(nonneur = gene_id %in% noneur) |>
+  filter(nonneur & log10(TPM+1)>2) |>
+  pull(gene_id) |> unique()
+  
 
 #~ Filter neurons ----
 
@@ -137,10 +176,10 @@ quantifs_filtered |>
 #~ Save prefiltering ----
 
 qs::qsave(quantifs_filtered,
-          "data/graph_power4/inputs/240410_preprocessed_quantifs_filtered.qs")
+          "data/graph_power4/inputs/240429_preprocessed_quantifs_filtered.qs")
 
 qs::qsave(sf_expression,
-          "data/graph_power4/inputs/240410_preprocessed_sf_expression.qs")
+          "data/graph_power4/inputs/240429_preprocessed_sf_expression.qs")
 
 
 
