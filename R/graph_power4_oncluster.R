@@ -90,7 +90,7 @@ source("R/functions_steps.R")
 outdir <- "data/graph_power4/outputs"
 
 
-datadir <- "data/graph_power4/inputs/240410_precomputed/"
+datadir <- "data/graph_power4/inputs/240429_precomputed/"
 
 nb_se <- qs::qread(file.path(datadir, "nb_se.qs"))
 nb_sf <- qs::qread(file.path(datadir, "nb_sf.qs"))
