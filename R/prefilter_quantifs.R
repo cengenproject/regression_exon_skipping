@@ -68,6 +68,36 @@ sf_expression |>
   pull(gene_id) |> unique()
   
 
+sf_expression |>
+  mutate(logTPM = log10(TPM+1)) |>
+  summarize(mean_TPM = mean(logTPM),
+            sd_TPM = sd(logTPM),
+            .by = c(transcript_id, gene_id)) |>
+  ggplot() +
+  theme_classic()+
+  geom_point(aes(x = mean_TPM, y = sd_TPM, color = sd_TPM >= .15), alpha = .1) +
+  geom_hline(aes(yintercept = .15))
+
+
+tx_to_keep <- sf_expression |>
+  mutate(logTPM = log10(TPM+1)) |>
+  summarize(mean_TPM = mean(logTPM),
+            sd_TPM = sd(logTPM),
+            .by = c(transcript_id, gene_id)) |>
+  filter(sd_TPM >= .15) |>
+  pull(transcript_id)
+
+# my_gene <- sample(tx_to_keep$gene_id, 1)
+# tx_to_keep |> filter(gene_id == my_gene)
+# sf_expression |> filter(gene_id == my_gene) |>
+#   ggplot() +
+#   theme_classic() +
+#   ggbeeswarm::geom_quasirandom(aes(x = transcript_id, y = log10(TPM+1)))
+
+sf_expression <- sf_expression |>
+  filter(transcript_id %in% tx_to_keep)
+
+
 #~ Filter neurons ----
 
 # Filter neurons with too few samples
