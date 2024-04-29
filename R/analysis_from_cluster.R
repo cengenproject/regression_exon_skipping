@@ -1435,51 +1435,33 @@ res_perm |>
   select(-starts_with("run_")) |>
   filter(! startsWith(metric, "bias_"),
          ! startsWith(metric, "literature")) |>
-  mutate(category = case_match(
-    metric,
-    "loss_frobenius" ~ "Global structure",
-    "loss_quadratic" ~ "Global structure",
-    "Rsquared" ~ "PSI reconstruction",
-    "mean_FEV" ~ "PSI reconstruction",
-    "TPR/FPR" ~ "Network",
-    "power_law" ~ "Network",
-  ) |>
-    factor(levels = c("Global structure", "PSI reconstruction", "Network")),
-  metric = case_match(
-    metric,
-    "loss_frobenius" ~ "Frobenius loss",
-    "loss_quadratic" ~ "Quadratic loss",
-    "Rsquared" ~ "R squared",
-    "mean_FEV" ~ "Fraction explained variance",
-    "TPR/FPR" ~ "TPR/FPR",
-    "power_law" ~ "Power law",
-  ) |>
-    factor(levels = c("Frobenius loss", "Quadratic loss",
-                      "R squared", "Fraction explained variance",
-                      "TPR/FPR", "Power law"))) |>
+  filter(metric %in% more_useful_metrics) |>
+  mutate(metric = factor(metric, levels = more_useful_metrics),
+         metric = recode_factor(metric,
+                                "loss_frobenius_adj" = "Frobenius loss",
+                                "mean_FEV" = "Fraction\nExplained Variance",
+                                "TPR/FPR" = "TPR / FPR",
+                                "power_law" = "Power Law")) |>
   ggplot(aes(x = 100*(1-sparsity_mean),
              y = mean,
              ymin = mean - sd, ymax = mean + sd)) +
   theme_bw() +
-  facet_grid(cols = vars(metric), rows = vars(category),
+  facet_grid(rows = vars(metric),
              scales = "free_y") +
   # ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
-  ggh4x::facet_nested_wrap(vars(category, metric),
-                           ncol = 2, nrow = 3,
-                           scales = "free_y") +
   geom_line() +
   geom_errorbar(width = .01) +
   geom_point(aes(shape = pval_adj < .05,
                  color = pval_adj < .05),
              size = 2) +
-  geom_vline(aes(xintercept = 97.9), linewidth = 5, alpha = .2) +
+  geom_vline(aes(xintercept = 96.97), linewidth = 5, alpha = .2) +
   # scale_x_log10() +
   ylab(NULL) + xlab("Sparsity (%)") +
   scale_color_manual(values = c("grey", 'red4')) +
   theme(legend.position = 'none')
 
-# ggsave("presentations/240308_figures/permutations.pdf",
-#        width = 15, height = 20, units = "cm")
+ggsave("presentations/240308_figures/permutations.pdf",
+       width = 10, height = 14, units = "cm")
 
 
 
@@ -1488,8 +1470,8 @@ res_perm |>
 #~ Selected case ----
 
 #~ Check plots ----
-final_tib <- read_one_res("240415_final_glasso_PSI_npntrunc_knn_k10_2_16",
-                          "data/graph_power4/from_cluster/240415_final")
+final_tib <- read_one_res("240426_final_glasso_PSI_npntrunc_knn_k4_2_16",
+                          "data/graph_power4/from_cluster/240426_final")
 
 # One with and one without permutations
 final_tib$permutation |> table()
@@ -1603,7 +1585,7 @@ tibble(
 ) |>
   ggplot() +
   theme_classic() +
-  geom_point(aes(x = measured, y = estimated), alpha = .2) +
+  geom_point(aes(x = measured, y = estimated), alpha = .1) +
   facet_wrap(~permuted) +
   xlab("PSI measured") + ylab("PSI estimated")
 
@@ -1632,7 +1614,8 @@ gg_selected_perm <- tibble(measured = permuted$se_valid_u[[1]][,selected_se] |> 
   xlab("PSI measured") + ylab("PSI estimated (from permutation)")
 
 
-patchwork::wrap_plots(gg_selected_noperm, gg_selected_perm)
+# patchwork::wrap_plots(gg_selected_noperm, gg_selected_perm)
+cowplot::plot_grid(gg_selected_noperm, gg_selected_perm)
 
 
 
@@ -1740,15 +1723,15 @@ Str <- main$S_train_hat_t[[1]]
 Sts[1:3,1:3]
 Str[1:3,1:3]
 
-image(Sts)
+printMat::matimage(Sts)
 
-image(permuted$S_valid_t[[1]])
+printMat::matimage(permuted$S_valid_t[[1]])
 
 opar <- par()
 
 par(mfrow = c(1,2))
-image(main$S_valid_t[[1]], main = "S test")
-image(permuted$S_valid_t[[1]], main = "S test (permuted)")
+printMat::matimage(main$S_valid_t[[1]], main = "S test")
+printMat::matimage(permuted$S_valid_t[[1]], main = "S test (permuted)")
 par(opar)
 
 
@@ -1784,13 +1767,13 @@ OMtr <- main$OM_train[[1]]
 Sts[1:3,1:3]
 OMtr[1:3,1:3]
 
-image(OMtr)
+printMat::matimage(OMtr)
 table(OMtr)
 OMtr_nodiag <- OMtr
 diag(OMtr_nodiag) <- 0
-image(OMtr_nodiag)
+printMat::matimage(OMtr_nodiag)
 
-image(Sts %*na% OMtr)
+printMat::matimage(Sts %*na% OMtr)
 
 annot_df <- data.frame(type = if_else(str_detect(colnames(Sts), "^SE_[0-9]{1,4}$"),
                                       "SE",
