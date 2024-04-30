@@ -11,5 +11,5 @@ set -ue
 
 ml dSQ
 
-dsq --job-file joblists/240415_final.txt --mem 5G --time 01:30:00 --partition day
+dsq --job-file joblists/240415_final.txt --mem 15G --time 15:30:00 --partition day
 
