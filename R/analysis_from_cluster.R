@@ -11,7 +11,7 @@ source("R/analysis_helpers.R")
 # various conditions, no permutation ----
 
 
-resdir <- "data/graph_power4/from_cluster/240416_noperm/"
+resdir <- "data/graph_power4/from_cluster/240429_noperm/"
 
 fl <- list.files(resdir)
 
@@ -129,15 +129,22 @@ for(i in seq_len(nrow(by_run))){
   
   ggsave(filename = paste0(i,"_",by_run[["run_name"]][[i]],".png"),
          plot = ggplot,
-         path = "data/intermediates/240426_best_penalty_noperm/penalties_by_run",
+         path = "data/intermediates/240429_best_penalty_noperm/penalties_by_run",
          width = 18, height = 20, units = "cm")
 }
 
 
 # same penalty for each algo
-manual_best_penalty <- tibble(run_id = 1:48,
+# manual_best_penalty <- tibble(run_id = 1:48,
+#                               penalty = c(
+#                                 rep(.2, 12),
+#                                 rep(.2, 12),
+#                                 rep(.2, 12),
+#                                 rep(.2, 12)
+#                               ))
+
+manual_best_penalty <- tibble(run_id = 1:36,
                               penalty = c(
-                                rep(.2, 12),
                                 rep(.2, 12),
                                 rep(.2, 12),
                                 rep(.2, 12)
@@ -239,6 +246,7 @@ more_useful_metrics <- c("loss_frobenius_adj",
 ComplexHeatmap::Heatmap(mat_best_by_run[,more_useful_metrics],
                         left_annotation = row_annot,
                         show_row_names = FALSE,
+                        rect_gp = grid::gpar(col="grey"),
                         cluster_columns = FALSE,
                         column_labels = c("Frobenius loss\n(inverted)",
                                           "Fraction\nExplained Variance",
@@ -914,7 +922,7 @@ best_by_run |>
 # knn k ----
 
 
-resdirknn <- "data/graph_power4/from_cluster/240415_knn2/"
+resdirknn <- "data/graph_power4/from_cluster/240430_k/"
 
 flknn <- list.files(resdirknn)
 

@@ -2,6 +2,8 @@
 #
 # From cluster
 
+# Inits ----
+
 library(tidyverse)
 library(igraph)
 
@@ -25,10 +27,14 @@ get_target_id <- function(event_id){
   res
 }
 
+# main <- qs::qread("data/graph_power4/from_cluster/240430_final/240426_final_glasso_PSI_npntrunc_knn_k4_2_4.qs")|>
+#   filter(penalty == 0.25, permutation == 0)
+
 main <- qs::qread("data/graph_power4/from_cluster/240426_final/240426_final_glasso_PSI_npntrunc_knn_k4_2_16.qs")|>
   filter(penalty == 0.25, permutation == 0)
 
 adj <- main$adj[[1]]
+
 
 
 
@@ -108,7 +114,7 @@ adj_tbl_gene |>
 
 hist(adj_tbl_gene$degree[adj_tbl_gene$degree != 0], breaks = 150)
 
-
+#~ examples ----
 adj_tbl_gene |>
   filter(sf_name == "unc-75") |>
   pull(degree) |> hist(breaks = 50)
@@ -122,7 +128,7 @@ adj_tbl_gene |>
   pull(degree) |> hist(breaks = 50)
 
 adj_tbl_gene |>
-  filter(sf_name == "asd-1") #|> filter(degree != 0)
+  filter(sf_name == "asd-1") |> #filter(degree != 0)
   pull(degree) |> hist(breaks = 50)
 
 adj_tbl_gene |>
@@ -136,7 +142,7 @@ adj_tbl_gene |>
   geom_point(aes(x = n, y = prop_positive))
 
 
-# by target
+#~~ by target ----
 adj_tbl_gene |>
   filter(target_name == "unc-16") |>
   filter(degree != 0)
@@ -268,6 +274,24 @@ se_in_microex <- microexons |>
   pull(event_id)
 
 
+size_tot <- adj_tbl |>
+  summarize(degree = biggest(degree),
+            .by = c(sf_id, sf_name,target_id,target_name, event_id)) |>
+  filter(degree != 0) |>
+  mutate(microexon = (event_id %in% se_in_microex)) |>
+  nrow()
+
+size_micro <- adj_tbl |>
+  summarize(degree = biggest(degree),
+            .by = c(sf_id, sf_name,target_id,target_name, event_id)) |>
+  filter(degree != 0) |>
+  mutate(microexon = (event_id %in% se_in_microex)) |>
+  filter(microexon) |>
+  nrow()
+
+
+
+
 test_res <- adj_tbl |>
   summarize(degree = biggest(degree),
             .by = c(sf_id, sf_name,target_id,target_name, event_id)) |>
@@ -281,15 +305,17 @@ test_res <- adj_tbl |>
          padj = p.adjust(p, "fdr")) |>
   arrange(padj)
 
-test_res
-
+test_res |>
+  filter(padj < .1)
+test_res |>
+  arrange(desc(n_microexon))
 
 
 #~ SF GO ----
 
 adj_tbl_gene$sf_id |>
   unique() |>
-  writeLines("presentations/240308_figures/background.txt")
+  writeLines("presentations/240330_figures/background.txt")
 
 adj_tbl_gene |>
   filter(abs(degree) > 0.05) |>
@@ -502,6 +528,564 @@ abs(adj)[, tx_unc75] |> colSums()
 abline(v = abs(adj)[, tx_unc75] |> colSums())
 
 names(colSums(abs(adj)))[colSums(abs(adj)) > .5] |>
-  wb_tx2g(tx2gt) |> i2s(gids)
+  wb_tx2g(tx2gt) |> i2s(gids) |> unique()
+
+colSums(abs(adj)) |>
+  sort(decreasing = TRUE) |>
+  head(n = 22) |>
+  names() |>
+  wb_tx2g(tx2gt) |>
+  i2s(gids) |>
+  unique() |>
+  clipr::write_clip()
 
 
+adj_tbl |>
+  summarize(`weighted degree` = sum(abs(degree)),
+            outdegree = sum(degree != 0),
+            .by = c(sf_id, sf_name)) |>
+  arrange(desc(`weighted degree`)) |>
+  ggplot() +
+  theme_classic() +
+  geom_point(aes(x = outdegree, y = `weighted degree`))
+
+# outdegree (nb of connections) and weighted degree (sum of connection weights) basically equivalent
+adj_tbl |>
+  summarize(outdegree = sum(degree != 0),
+            .by = c(sf_id, sf_name)) |>
+  arrange(desc(outdegree)) |>
+  head(20) |>
+  clipr::write_clip()
+
+
+
+colSums(abs(adj)) |>
+  enframe(name = "tx_id", value = "sum_adj") |>
+  mutate(gene_id = wb_tx2g(tx_id, tx2gt),
+         gene_name = i2s(gene_id, gids)) |>
+  summarize(`weighted degree` = sum(sum_adj),
+            .by = c(gene_id, gene_name)) |>
+  arrange(desc(`weighted degree`)) |>
+  head(20) |>
+  clipr::write_clip()
+
+
+
+
+# examples ----
+
+#~ cgds-1 ----
+sfs_cdgs1 <- adj_tbl_gene |>
+  filter(target_name == "cdgs-1") |>
+  filter(degree != 0) |>
+  pull(sf_id)
+
+
+adj_tbl_gene |>
+  filter(target_name == "cdgs-1") |>
+  filter(sf_name %in% c("unc-75"))
+
+se_coords |> filter(gene_id == s2i("cdgs-1", gids))
+
+adj_cdgs1 <- adj["SE_173", wb_g2tx(sfs_cdgs1, tx2gt) |> unlist(), drop = FALSE]
+head(adj_cdgs1)
+
+
+
+
+nb_sf <- ncol(adj_cdgs1)
+nb_se <- nrow(adj_cdgs1)
+
+adjm <- rbind(
+  cbind(matrix(0, nrow = nb_sf, ncol = nb_sf), t(adj_cdgs1)),
+  cbind(adj_cdgs1, matrix(0, nrow = nb_se, ncol = nb_se))
+)
+adjm <- adjm != 0
+dimnames(adjm) <- list(c(colnames(adj_cdgs1), rownames(adj_cdgs1)),
+                       c(colnames(adj_cdgs1), rownames(adj_cdgs1)))
+
+gr <- graph_from_adjacency_matrix(adjm,
+                                  mode = "directed")
+
+
+
+V(gr)$type <- rep(c("SF", "SE"), times = c(nb_sf, nb_se))
+V(gr)$color <- rep(c("red4", "blue4"), times = c(nb_sf, nb_se))
+
+gr
+
+plot(gr,
+     vertex.label = NA,
+     vertex.size = 4,
+     edge.width = 0.1,
+     edge.arrow.mode = 0,
+     layout = layout.graphopt(gr, spring.length = 100, spring.constant = .01))
+
+
+
+plot(gr,
+     vertex.label = NA,
+     vertex.size = 4,
+     edge.width = 0.1,
+     edge.arrow.mode = 0,
+     layout = layout.graphopt(gr, spring.length = 100, spring.constant = .01))
+
+
+
+
+
+#~ unc-16 ----
+
+adj_tbl_gene |>
+  filter(target_name == "unc-16") |>
+  filter(degree != 0)
+
+ground_truth_sf <- c("unc-75","exc-7","prp-40")
+
+
+adj_tbl_gene |>
+  filter(target_name == "unc-16",
+         degree !=0 |
+           sf_name %in% ground_truth_sf) 
+
+# exon coords
+# se_coords |>
+#   filter(gene_id == s2i("unc-16", gids),
+#          startsWith(event_id, "SE")) |>
+#   filter(event_id %in% ev_unc16)
+
+sfs_unc16 <- adj_tbl_gene |>
+  filter(target_name == "unc-16",
+         degree !=0 |
+           sf_name %in% ground_truth_sf) |>
+  pull(sf_id)
+
+tx_sf_unc16 <- wb_g2tx(sfs_unc16, tx2gt) |> unlist()
+
+adj_tbl_gene |>
+  filter(target_name == "cdgs-1") |>
+  filter(sf_name %in% c("unc-75"))
+
+ev_unc16 <- se_coords |>
+  filter(gene_id == s2i("unc-16", gids),
+         startsWith(event_id, "SE")) |>
+  pull(event_id) |>
+  intersect(rownames(adj))
+
+adj_unc16 <- adj[ev_unc16, wb_g2tx(sfs_unc16, tx2gt) |> unlist(), drop = FALSE]
+head(adj_unc16)
+
+
+
+
+nb_sf <- ncol(adj_unc16)
+nb_se <- nrow(adj_unc16)
+
+adjm <- rbind(
+  cbind(matrix(0, nrow = nb_sf, ncol = nb_sf), t(adj_unc16)),
+  cbind(adj_unc16, matrix(0, nrow = nb_se, ncol = nb_se))
+)
+adjm <- adjm != 0
+dimnames(adjm) <- list(c(colnames(adj_unc16), rownames(adj_unc16)),
+                       c(colnames(adj_unc16), rownames(adj_unc16)))
+
+gr <- graph_from_adjacency_matrix(adjm,
+                                  mode = "directed")
+
+
+
+V(gr)$type <- rep(c("SF", "SE"), times = c(nb_sf, nb_se))
+V(gr)$shape <- rep(c("circle", "square"), times = c(nb_sf, nb_se))
+
+is_in_ground_truth <- V(gr)[1:nb_sf] |>
+  names() |>
+  wb_tx2g(tx2gt) |>
+  (\(g_id) g_id %in% s2i(ground_truth_sf, gids))()
+
+V(gr)$color <- (c("red4","green3")[is_in_ground_truth+1] |>
+  c(rep("blue4", times = nb_se)))
+
+
+
+plot(gr,
+     vertex.label = NA,
+     vertex.size = 4,
+     edge.width = 0.1,
+     edge.arrow.mode = 0,
+     layout = layout.graphopt(gr, spring.length = 100, spring.constant = .01))
+
+
+
+
+#~~ by gene ----
+colgenes <- colnames(adj) |> wb_tx2g(tx2gt)
+
+adj_by_gene <- matrix(nrow = nrow(adj),
+                      ncol = length(unique(colgenes)),
+                      dimnames = list(rownames(adj), unique(colgenes)))
+for(cur_gene in unique(colgenes)){
+  adj_by_gene[,cur_gene] <- apply(adj[,colgenes == cur_gene,drop=FALSE], 1, biggest)
+}
+head(adj_by_gene)
+head(adj)
+
+colnames(adj_by_gene) <- i2s(colnames(adj_by_gene), gids, warn_missing = TRUE)
+
+
+
+
+
+
+ground_truth_sf <- c("unc-75","exc-7","prp-40")
+
+
+adj_tbl_gene |>
+  filter(target_name == "unc-16",
+         degree !=0 |
+           sf_name %in% ground_truth_sf) 
+
+
+
+
+sfs_unc16 <- adj_tbl_gene |>
+  filter(target_name == "unc-16",
+         degree !=0 |
+           sf_name %in% ground_truth_sf) |>
+  pull(sf_id)
+
+sf_unc16 <- i2s(sfs_unc16, gids)
+
+
+
+ev_unc16 <- se_coords |>
+  filter(gene_id == s2i("unc-16", gids),
+         startsWith(event_id, "SE")) |>
+  pull(event_id) |>
+  intersect(rownames(adj))
+
+
+
+adj_unc16 <- adj_by_gene[ev_unc16, sf_unc16]
+head(adj_unc16)
+
+
+
+
+nb_sf <- ncol(adj_unc16)
+nb_se <- nrow(adj_unc16)
+
+adjm <- rbind(
+  cbind(matrix(0, nrow = nb_sf, ncol = nb_sf), t(adj_unc16)),
+  cbind(adj_unc16, matrix(0, nrow = nb_se, ncol = nb_se))
+)
+adjm <- adjm != 0
+dimnames(adjm) <- list(c(colnames(adj_unc16), rownames(adj_unc16)),
+                       c(colnames(adj_unc16), rownames(adj_unc16)))
+
+gr <- graph_from_adjacency_matrix(adjm,
+                                  mode = "undirected")
+
+
+
+V(gr)$type <- rep(c("SF", "SE"), times = c(nb_sf, nb_se))
+V(gr)$shape <- rep(c("circle", "square"), times = c(nb_sf, nb_se))
+
+is_in_ground_truth <- V(gr)[1:nb_sf] |>
+  names() |>
+  (\(g_id) g_id %in% ground_truth_sf)()
+
+V(gr)$color <- (c("red4","green3")[is_in_ground_truth+1] |>
+                  c(rep("blue4", times = nb_se)))
+
+
+
+plot(gr,
+     vertex.label = NA,
+     vertex.size = 4,
+     edge.width = 0.1,
+     edge.arrow.mode = 0)
+
+
+
+RCy3::createNetworkFromIgraph(gr,"unc16")
+
+
+
+
+
+#~ lin-10 ----
+
+adj_tbl_gene |>
+  filter(target_name == "lin-10") |>
+  filter(degree != 0)
+
+
+#~ C07A12.7 ----
+
+adj_tbl_gene |>
+  filter(target_name == "C07A12.7") |>
+  filter(degree != 0) |>
+  pull(sf_name) |> sort() |> paste0(collapse = ", ") |> writeClipboard()
+
+
+
+#~~ by gene ----
+trgt <- "C07A12.7"
+ground_truth_sf <- c("unc-75")
+
+
+adj_tbl_gene |>
+  filter(target_name == trgt,
+         degree !=0 |
+           sf_name %in% ground_truth_sf) 
+
+
+
+
+sfs_sub <- adj_tbl_gene |>
+  filter(target_name == trgt,
+         degree !=0 |
+           sf_name %in% ground_truth_sf) |>
+  pull(sf_id)
+
+sfs_sub <- i2s(sfs_sub, gids)
+
+
+
+ev_sub <- se_coords |>
+  filter(gene_id == s2i(trgt, gids),
+         startsWith(event_id, "SE")) |>
+  pull(event_id) |>
+  intersect(rownames(adj))
+
+
+
+adj_sub <- adj_by_gene[ev_sub, sfs_sub, drop = FALSE]
+head(adj_sub)
+
+
+
+
+nb_sf <- ncol(adj_sub)
+nb_se <- nrow(adj_sub)
+
+adjm <- rbind(
+  cbind(matrix(0, nrow = nb_sf, ncol = nb_sf), t(adj_sub)),
+  cbind(adj_sub, matrix(0, nrow = nb_se, ncol = nb_se))
+)
+adjm <- adjm != 0
+dimnames(adjm) <- list(c(colnames(adj_sub), rownames(adj_sub)),
+                       c(colnames(adj_sub), rownames(adj_sub)))
+
+gr <- graph_from_adjacency_matrix(adjm,
+                                  mode = "undirected")
+
+
+
+V(gr)$type <- rep(c("SF", "SE"), times = c(nb_sf, nb_se))
+V(gr)$shape <- rep(c("circle", "square"), times = c(nb_sf, nb_se))
+
+is_in_ground_truth <- V(gr)[1:nb_sf] |>
+  names() |>
+  (\(g_id) g_id %in% ground_truth_sf)()
+
+V(gr)$color <- (c("red4","green3")[is_in_ground_truth+1] |>
+                  c(rep("blue4", times = nb_se)))
+
+
+
+plot(gr,
+     vertex.label = NA,
+     vertex.size = 10,
+     edge.width = 0.1,
+     edge.arrow.mode = 0)
+
+
+RCy3::cytoscapePing()
+RCy3::createNetworkFromIgraph(gr,"C07A12.7")
+
+
+
+
+
+
+
+#~ ret-1 -----
+
+adj_tbl_gene |>
+  filter(target_name == "ret-1") |>
+  filter(degree != 0)
+
+#~~ by gene ----
+trgt <- "ret-1"
+ground_truth_sf <- c("unc-75", "hrpr-1","sfa-1","uaf-2","snr-1","prp-38")
+
+
+adj_tbl_gene |>
+  filter(target_name == trgt,
+         degree !=0 |
+           sf_name %in% ground_truth_sf) 
+
+
+
+
+sfs_sub <- adj_tbl_gene |>
+  filter(target_name == trgt,
+         degree !=0 |
+           sf_name %in% ground_truth_sf) |>
+  pull(sf_id)
+
+sfs_sub <- i2s(sfs_sub, gids)
+
+
+
+ev_sub <- se_coords |>
+  filter(gene_id == s2i(trgt, gids),
+         startsWith(event_id, "SE")) |>
+  pull(event_id) |>
+  intersect(rownames(adj))
+
+
+
+adj_sub <- adj_by_gene[ev_sub, sfs_sub, drop = FALSE]
+head(adj_sub)
+
+
+
+
+nb_sf <- ncol(adj_sub)
+nb_se <- nrow(adj_sub)
+
+adjm <- rbind(
+  cbind(matrix(0, nrow = nb_sf, ncol = nb_sf), t(adj_sub)),
+  cbind(adj_sub, matrix(0, nrow = nb_se, ncol = nb_se))
+)
+adjm <- adjm != 0
+dimnames(adjm) <- list(c(colnames(adj_sub), rownames(adj_sub)),
+                       c(colnames(adj_sub), rownames(adj_sub)))
+
+gr <- graph_from_adjacency_matrix(adjm,
+                                  mode = "undirected")
+
+
+
+V(gr)$type <- rep(c("SF", "SE"), times = c(nb_sf, nb_se))
+V(gr)$shape <- rep(c("circle", "square"), times = c(nb_sf, nb_se))
+
+is_in_ground_truth <- V(gr)[1:nb_sf] |>
+  names() |>
+  (\(g_id) g_id %in% ground_truth_sf)()
+
+V(gr)$color <- (c("red4","green3")[is_in_ground_truth+1] |>
+                  c(rep("blue4", times = nb_se)))
+
+
+
+plot(gr,
+     vertex.label = NA,
+     vertex.size = 4,
+     edge.width = 0.1,
+     edge.arrow.mode = 0)
+
+
+RCy3::cytoscapePing()
+RCy3::createNetworkFromIgraph(gr,"re-1")
+
+
+
+
+#~ daf-2 ----
+
+
+adj_tbl_gene |>
+  filter(target_name == "daf-2") |>
+  filter(degree != 0) |>
+  pull(sf_name) |>
+  setdiff(ground_truth_sf) |>
+  sort() |>
+  paste0(collapse = ", ") |>
+  writeClipboard()
+
+adj_tbl_gene |>
+  filter(target_name == "daf-2") |>
+  filter(sf_name %in% c("unc-75", "ptb-1", "asd-1", "hrpa-1", "hrpf-1", "exc-7", "rsp-8"))
+
+
+
+
+
+#~~ by gene ----
+trgt <- "daf-2"
+ground_truth_sf <- c("unc-75", "ptb-1", "asd-1", "hrpa-1",
+                     "hrpf-1", "exc-7", "rsp-8", "rsp-2")
+
+
+adj_tbl_gene |>
+  filter(target_name == trgt,
+         degree !=0 |
+           sf_name %in% ground_truth_sf) 
+
+
+
+
+sfs_sub <- adj_tbl_gene |>
+  filter(target_name == trgt,
+         degree !=0 |
+           sf_name %in% ground_truth_sf) |>
+  pull(sf_id)
+
+sfs_sub <- i2s(sfs_sub, gids)
+
+
+
+ev_sub <- se_coords |>
+  filter(gene_id == s2i(trgt, gids),
+         startsWith(event_id, "SE")) |>
+  pull(event_id) |>
+  intersect(rownames(adj))
+
+
+
+adj_sub <- adj_by_gene[ev_sub, sfs_sub, drop = FALSE]
+head(adj_sub)
+
+
+
+
+nb_sf <- ncol(adj_sub)
+nb_se <- nrow(adj_sub)
+
+adjm <- rbind(
+  cbind(matrix(0, nrow = nb_sf, ncol = nb_sf), t(adj_sub)),
+  cbind(adj_sub, matrix(0, nrow = nb_se, ncol = nb_se))
+)
+adjm <- adjm != 0
+dimnames(adjm) <- list(c(colnames(adj_sub), rownames(adj_sub)),
+                       c(colnames(adj_sub), rownames(adj_sub)))
+
+gr <- graph_from_adjacency_matrix(adjm,
+                                  mode = "undirected")
+
+
+
+V(gr)$type <- rep(c("SF", "SE"), times = c(nb_sf, nb_se))
+V(gr)$shape <- rep(c("circle", "square"), times = c(nb_sf, nb_se))
+
+is_in_ground_truth <- V(gr)[1:nb_sf] |>
+  names() |>
+  (\(g_id) g_id %in% ground_truth_sf)()
+
+V(gr)$color <- (c("red4","green3")[is_in_ground_truth+1] |>
+                  c(rep("blue4", times = nb_se)))
+
+
+
+plot(gr,
+     vertex.label = NA,
+     vertex.size = 4,
+     edge.width = 0.1,
+     edge.arrow.mode = 0)
+
+
+RCy3::cytoscapePing()
+RCy3::createNetworkFromIgraph(gr,"daf-2")
