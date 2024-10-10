@@ -313,9 +313,9 @@ test_res |>
 
 #~ SF GO ----
 
-adj_tbl_gene$sf_id |>
-  unique() |>
-  writeLines("presentations/240330_figures/background.txt")
+# adj_tbl_gene$sf_id |>
+#   unique() |>
+  # writeLines("presentations/240308_figures/background.txt")
 
 adj_tbl_gene |>
   filter(abs(degree) > 0.05) |>
@@ -810,6 +810,20 @@ plot(gr,
 RCy3::createNetworkFromIgraph(gr,"unc16")
 
 
+# --> source data
+# trgt <- "unc-16"
+# se_coords |>
+#   filter(gene_id == s2i(trgt, gids),
+#          startsWith(event_id, "SE")) |>
+#   clipr::write_clip()
+# 
+# adj_tbl |>
+#   filter(target_name == trgt,
+#          degree !=0 |
+#            sf_name %in% ground_truth_sf) |>
+#   clipr::write_clip()
+
+
 
 
 
@@ -906,8 +920,17 @@ RCy3::createNetworkFromIgraph(gr,"C07A12.7")
 
 
 
-
-
+# --> source data
+# se_coords |>
+#   filter(gene_id == s2i(trgt, gids),
+#          startsWith(event_id, "SE")) |>
+#   clipr::write_clip()
+# 
+# adj_tbl |>
+#   filter(target_name == trgt,
+#          degree !=0 |
+#            sf_name %in% ground_truth_sf) |>
+#   clipr::write_clip()
 
 
 #~ ret-1 -----
@@ -1089,3 +1112,19 @@ plot(gr,
 
 RCy3::cytoscapePing()
 RCy3::createNetworkFromIgraph(gr,"daf-2")
+
+
+
+# --> source data
+se_coords |>
+  filter(gene_id == s2i(trgt, gids),
+         startsWith(event_id, "SE")) |>
+  clipr::write_clip()
+
+adj_tbl |>
+  filter(target_name == trgt,
+         degree !=0 |
+           sf_name %in% ground_truth_sf) |>
+  clipr::write_clip()
+
+

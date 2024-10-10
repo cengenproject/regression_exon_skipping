@@ -6,12 +6,13 @@ library(tidyverse) |> suppressPackageStartupMessages()
 
 source("R/analysis_helpers.R")
 
+export_dir <- "presentations/241010_outs"
 
 
 # various conditions, no permutation ----
 
 
-resdir <- "data/graph_power4/from_cluster/240429_noperm/"
+resdir <- "data/graph_power4/from_cluster/240416_noperm/"
 
 fl <- list.files(resdir)
 
@@ -127,28 +128,30 @@ for(i in seq_len(nrow(by_run))){
                alpha = .2, color = "grey")+
     geom_errorbar(width = .05)
   
-  ggsave(filename = paste0(i,"_",by_run[["run_name"]][[i]],".png"),
-         plot = ggplot,
-         path = "data/intermediates/240429_best_penalty_noperm/penalties_by_run",
-         width = 18, height = 20, units = "cm")
+  # ggsave(filename = paste0(i,"_",by_run[["run_name"]][[i]],".png"),
+  #        plot = ggplot,
+  #        path = "data/intermediates/240429_best_penalty_noperm/penalties_by_run",
+  #        width = 18, height = 20, units = "cm")
 }
 
 
 # same penalty for each algo
-# manual_best_penalty <- tibble(run_id = 1:48,
-#                               penalty = c(
-#                                 rep(.2, 12),
-#                                 rep(.2, 12),
-#                                 rep(.2, 12),
-#                                 rep(.2, 12)
-#                               ))
-
-manual_best_penalty <- tibble(run_id = 1:36,
+# 240410, only SFs
+manual_best_penalty <- tibble(run_id = 1:48,
                               penalty = c(
+                                rep(.2, 12),
                                 rep(.2, 12),
                                 rep(.2, 12),
                                 rep(.2, 12)
                               ))
+
+# 240429 all RBPs
+# manual_best_penalty <- tibble(run_id = 1:36,
+#                               penalty = c(
+#                                 rep(.2, 12),
+#                                 rep(.2, 12),
+#                                 rep(.2, 12)
+#                               ))
 
 best_by_run <- res_noperm |>
   select(-c(results, summary_by_sparsity)) |>
@@ -253,9 +256,36 @@ ComplexHeatmap::Heatmap(mat_best_by_run[,more_useful_metrics],
                                           "TPR / FPR", "Power Law"),
                         name = "Z-score")
 
-pdf("presentations/240308_figures/heatmap.pdf",
-    width = 8, height = 8)
-dev.off()
+# pdf(file.path(export_dir, "heatmap.pdf"),
+#     width = 8, height = 8)
+# dev.off()
+
+
+# > Fig 7B
+
+# ---> source Data
+# use non-Zscored best_by_run
+stopifnot(rownames(best_by_run |>
+                     # filter(run_algo != "QUIC") |>
+                     pivot_wider(id_cols = run_name,
+                                 names_from = "metric",
+                                 values_from = "mean") |>
+                     column_to_rownames("run_name")) == rownames(annot_best_by_run))
+
+# cbind(annot_best_by_run,
+#       best_by_run |>
+#         # filter(run_algo != "QUIC") |>
+#         pivot_wider(id_cols = run_name,
+#                     names_from = "metric",
+#                     values_from = "mean") |>
+#         column_to_rownames("run_name")) |>
+#   writexl::write_xlsx(file.path(export_dir, "sourceData_heatmap.xlsx"))
+
+
+
+
+
+
 
 for(.metric in unique(best_by_run$metric)){
   gg <- best_by_run |>
@@ -1138,8 +1168,18 @@ res_knn |>
   ylab(NULL) + xlab("k") +
   theme(legend.position = "none")
 
-# ggsave("knn.pdf", path = "presentations/240308_figures/",
+# ggsave("knn.pdf", path = export_dir,
 #        width = 12, height = 17, units = "cm")
+
+# > Fig S5B
+
+# ---> source Data
+
+# res_knn |>
+#   select(-c(results, summary_by_sparsity)) |>
+#   unnest(cols = summary_by_penalty) |>
+#   writexl::write_xlsx(file.path(export_dir, "sourceData_k.xlsx"))
+
 
 
 
@@ -1283,7 +1323,7 @@ for(metr in unique(res_perm$summary_by_penalty[[1]]$metric)){
   
 }
 
-# For fig Suppl: against sparsity, show all permutations ----
+#~ For fig Suppl: against sparsity, show all permutations ----
 
 design <- "
 A#
@@ -1339,6 +1379,12 @@ ggplot(toplot |> filter(permuted == "permutation")) +
 #        width = 15, height = 20, units = "cm")
 
 
+# > Fig S5C
+
+
+# --> source Data
+# toplot |>
+#   writexl::write_xlsx(file.path(export_dir, "sourceData_permutations.xlsx"))
 
 
 
@@ -1458,7 +1504,6 @@ res_perm |>
              scales = "free_y") +
   # ggh4x::facet_manual(~ metric, scales = "free_y",design = design) +
   geom_line() +
-  geom_errorbar(width = .01) +
   geom_point(aes(shape = pval_adj < .05,
                  color = pval_adj < .05),
              size = 2) +
@@ -1468,8 +1513,28 @@ res_perm |>
   scale_color_manual(values = c("grey", 'red4')) +
   theme(legend.position = 'none')
 
-ggsave("presentations/240308_figures/permutations.pdf",
-       width = 10, height = 14, units = "cm")
+# ggsave("presentations/240308_figures/permutations.pdf",
+#        width = 10, height = 14, units = "cm")
+
+# > Fig 7C
+
+# ---> source Data
+# res_perm |>
+#   unnest(summary_by_sparsity) |>
+#   select(-summary_by_penalty) |>
+#   rename(prop_non_sparse = sparsity) |>
+#   writexl::write_xlsx(file.path(export_dir, "sourceData_permutations_averaged.xlsx"))
+
+
+
+
+
+
+
+# ____ End ____ ----
+
+
+# Everything below this was exploratory and not in paper
 
 
 
@@ -1538,6 +1603,8 @@ final_tib |>
 
 
 # Check PSI reconstruction ----
+
+
 all_qs <- qs::qread("data/graph_power4/from_cluster/240415_final/240415_final_glasso_PSI_npntrunc_knn_k10_2_16.qs")
 
 main <- all_qs |>
