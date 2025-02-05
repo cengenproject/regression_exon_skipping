@@ -37,7 +37,7 @@ res <- tibble(run_name = str_remove(fl, "\\.csv$")) |>
   nest(.by = starts_with("run_"), .key = "results")
 
 
-
+# table S8 (metrics hyperparameters): save `res` without the nest
 
 res_noperm <- res |>
   mutate(summary_by_penalty = map(results, summarize_metrics_by_penalty),
