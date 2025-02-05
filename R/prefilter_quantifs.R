@@ -38,6 +38,24 @@ sf_expression <- read_tsv("data/export_for_arman/231208_t_exp.tsv") |>
   filter(sample_id %in% unique(quantifs$sample_id)) # remove RICr133, Ref, ...
 
 
+
+
+
+
+
+# save mostly unfiltered sf_expression for supp table S6
+# we removed the outlier samples and restricted genes in our putative SF list
+# but we didn't filter the genes based on expression (happens below in script)
+
+writexl::write_xlsx(sf_expression,
+                    "data/2404_dataset/table_S6_SF_expressions.xslx")
+
+
+
+
+
+
+
 # filter SF expression ----
 
 # load Alec's sc-bulk integration
